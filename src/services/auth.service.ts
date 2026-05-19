@@ -18,7 +18,7 @@ let currentUser: User | null = null;
 async function fetchProfile(authUserId: string, email: string): Promise<User | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, name, avatar_url, role, is_admin, created_at')
+    .select('id, email, name, avatar_url, role, created_at')
     .eq('id', authUserId)
     .single();
 
@@ -29,7 +29,6 @@ async function fetchProfile(authUserId: string, email: string): Promise<User | n
       email,
       name: email.split('@')[0] ?? 'User',
       role: 'user',
-      isAdmin: false,
       createdAt: new Date().toISOString(),
     };
   }
@@ -40,7 +39,6 @@ async function fetchProfile(authUserId: string, email: string): Promise<User | n
     name: data.name,
     avatarUrl: data.avatar_url ?? undefined,
     role: (data.role as Role) ?? 'user',
-    isAdmin: data.is_admin === true,
     createdAt: data.created_at,
   };
 }

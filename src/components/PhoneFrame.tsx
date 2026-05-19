@@ -8,7 +8,6 @@ import {
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors } from '../theme/theme';
-import { isOnAdminUrl } from '../admin/navigation/adminUrl';
 
 // Intrinsic size of the phone mockup (matches iPhone 14 Pro reference screen)
 const PHONE_WIDTH = 390;
@@ -16,12 +15,6 @@ const PHONE_HEIGHT = 844;
 
 export default function PhoneFrame({ children }: { children: React.ReactNode }) {
   if (Platform.OS !== 'web') {
-    return <>{children}</>;
-  }
-
-  // Le back-office admin a besoin de la pleine largeur desktop : pas de cadre
-  // téléphone. La détection se fait sur l'URL pour rester synchrone côté SSR.
-  if (isOnAdminUrl()) {
     return <>{children}</>;
   }
 

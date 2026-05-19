@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { authService } from '../services/auth.service';
@@ -19,11 +18,6 @@ import { User } from '../types/domain';
 import UserTabs from './UserTabs';
 import ProTabs from './ProTabs';
 import OrgTabs from './OrgTabs';
-
-import AdminStack from '../admin/navigation/AdminStack';
-import AdminAccessDenied from '../admin/screens/AdminAccessDeniedScreen';
-import { adminLinking } from '../admin/navigation/adminLinking';
-import { isOnAdminUrl } from '../admin/navigation/adminUrl';
 
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -96,8 +90,6 @@ export default function RootNavigator() {
   // Tick to re-render when org memberships load (routes pro users with an
   // active admin membership toward OrgTabs instead of ProTabs).
   const [, setMembershipTick] = useState(0);
-  // Sur web, on suit l'URL en cours pour pouvoir router vers /admin
-  const [onAdminUrl, setOnAdminUrl] = useState(isOnAdminUrl());
 
   useEffect(() => {
     // Hydrate public caches on app start (classes + sessions + teachers +
@@ -131,52 +123,15 @@ export default function RootNavigator() {
       }
     });
 
-    // Web only: surveille les changements d'URL (back/forward navigation)
-    let popListener: (() => void) | undefined;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const onPop = () => setOnAdminUrl(isOnAdminUrl());
-      window.addEventListener('popstate', onPop);
-      popListener = () => window.removeEventListener('popstate', onPop);
-    }
-
     return () => {
       unsubOrg();
       unsubAuth();
-      popListener?.();
     };
   }, []);
 
-  // ── Branche admin (URL /admin/*) ──
-  // Garde côté front : seul un user authentifié avec is_admin=true accède.
-  // La RLS Supabase est la garde de fond, c'est elle qui empêche un user
-  // déterminé qui patcherait le bundle JS de lire des données admin.
-  if (onAdminUrl) {
-    // Mode preview UI-only : permet de visualiser les écrans admin sans
-    // compte. ⚠️ N'AFFECTE PAS LA SÉCURITÉ DES DONNÉES : Supabase RLS bloque
-    // de toute façon toutes les requêtes côté serveur. À utiliser pour la
-    // revue visuelle avant déploiement.
-    const previewMode =
-      Platform.OS === 'web' &&
-      typeof window !== 'undefined' &&
-      window.location.search.includes('preview=1');
-
-    if (!previewMode) {
-      if (user === null) {
-        return <AdminAccessDenied reason="not_logged" />;
-      }
-      if (!user.isAdmin) {
-        return <AdminAccessDenied reason="not_admin" />;
-      }
-    }
-    return (
-      <NavigationContainer linking={adminLinking}>
-        <AdminStack />
-      </NavigationContainer>
-    );
-  }
-
-  // ── Branche app standard ──
   // Pro users with an active org_admin membership get the OrgTabs shell.
+  // This covers both the "just signed up a new structure" case and returning
+  // admins. An indep teacher without any admin role keeps the regular ProTabs.
   const isOrgAdmin =
     user?.role === 'pro' &&
     !!user &&

@@ -2,11 +2,6 @@
 // Matches Supabase schema in services/supabase/schema.sql
 
 export type Role = 'user' | 'pro';
-
-// Niveau d'accès plate-forme. Indépendant de `role` : un admin peut aussi être
-// 'user' ou 'pro' (utile en dev/test). Le flag est attribué manuellement en SQL
-// (jamais via signup) — voir supabase/migrations_admin.sql.
-export type PlatformAccess = 'admin' | 'standard';
 export type Level = 'beginner' | 'intermediate' | 'advanced' | 'all';
 export type ClassFormat = 'individual' | 'group';
 export type Category =
@@ -48,7 +43,6 @@ export interface User {
   name: string;
   avatarUrl?: string;
   role: Role;
-  isAdmin?: boolean;
   createdAt: string;
 }
 

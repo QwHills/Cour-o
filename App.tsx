@@ -8,7 +8,6 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import { initMockPayments } from './src/data/initMockPayments';
 import { captureReferralFromUrl } from './src/services/points/referralStorage';
 import { initMonitoring } from './src/services/monitoring';
-import { isOnAdminUrl } from './src/admin/navigation/adminUrl';
 
 const STRIPE_KEY = process.env.EXPO_PUBLIC_STRIPE_KEY ?? '';
 
@@ -17,8 +16,7 @@ const STRIPE_KEY = process.env.EXPO_PUBLIC_STRIPE_KEY ?? '';
 initMonitoring();
 
 export default function App() {
-  // L'admin n'a pas besoin du splash lifestyle de l'app grand public.
-  const [showSplash, setShowSplash] = useState(!isOnAdminUrl());
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     initMockPayments();
