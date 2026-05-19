@@ -1,0 +1,10 @@
+project_id = "fjskdokvroylnmkkmsof"
+
+# Payment intent is protected by STRIPE_SECRET_KEY server-side, not by user JWT.
+# Disabling verify_jwt works around Supabase's ES256 JWT validation bug in Edge runtime.
+[functions.create-payment-intent]
+verify_jwt = false
+
+# Stripe webhook is verified via stripe-signature header; it doesn't use JWT.
+[functions.stripe-webhook]
+verify_jwt = false

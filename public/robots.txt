@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /_expo/
+Disallow: /assets/
+
+Sitemap: https://koureo.fr/sitemap.xml

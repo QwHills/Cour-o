@@ -39,3 +39,17 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Environment variables
+.env
+.env.local
+.vercel
+
+# Local Claude Code config (contient des chemins absolus)
+.claude/
+
+# Backups d'assets (icônes pré-rebrand)
+assets/icon-backup.png
+assets/icon-original.png
+assets/icon-pre-teal.png
+assets/splash-icon-pre-teal.png

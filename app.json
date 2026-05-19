@@ -1,19 +1,28 @@
 {
   "expo": {
-    "name": "CoursSurPlace",
-    "slug": "CoursSurPlace",
+    "name": "Koureo",
+    "slug": "koureo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "koureo",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#f8fbfa"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "app.koureo",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Koureo utilise votre position pour vous montrer les cours et les professeurs autour de vous sur la carte.",
+        "NSPhotoLibraryUsageDescription": "Koureo accède à vos photos pour vous permettre de personnaliser votre profil et illustrer vos cours.",
+        "NSCameraUsageDescription": "Koureo utilise l'appareil photo pour vous permettre de prendre une photo de profil ou de votre activité.",
+        "NSCalendarsUsageDescription": "Koureo accède à votre calendrier pour éviter les conflits avec vos rendez-vous personnels et y ajouter vos sessions de cours.",
+        "NSCalendarsFullAccessUsageDescription": "Koureo a besoin d'un accès complet à votre calendrier pour lire vos créneaux occupés et y enregistrer automatiquement vos sessions Koureo."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,10 +30,36 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "app.koureo"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.app.koureo",
+          "enableGooglePay": false
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Koureo accède à votre calendrier pour éviter les conflits et y ajouter vos sessions.",
+          "remindersPermission": "Koureo n'utilise pas les rappels, mais l'accès est lié au calendrier sur iOS."
+        }
+      ],
+      "@sentry/react-native"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bbf77ee6-bd26-44fb-8fe7-42650c2399c6"
+      }
+    },
+    "owner": "quentinhillion"
   }
 }

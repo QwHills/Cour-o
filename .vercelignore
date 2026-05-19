@@ -1,0 +1,11 @@
+node_modules
+ios
+android
+dist
+.expo
+.git
+.DS_Store
+*.log
+coverage
+supabase/.temp
+supabase/.branches
