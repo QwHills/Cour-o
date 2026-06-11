@@ -367,6 +367,8 @@ export interface CertificationProgress {
 // Dashboard KPIs
 export interface ProDashboardStats {
   upcomingBookings: number;
+  // Réservations confirmées/honorées créées sur les 7 derniers jours
+  recentBookings: number;
   weekRevenue: number;
   fillRate: number;
   totalClasses: number;

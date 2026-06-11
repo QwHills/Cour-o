@@ -12,6 +12,7 @@ import {
   TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import TeacherBadge from '../../components/TeacherBadge';
 import { TeacherStatus, TeacherProfile } from '../../types/domain';
@@ -21,6 +22,10 @@ import {
   Conversation,
   Message,
 } from '../../services/messaging.service';
+import {
+  adminMessagesService,
+  AdminMessage,
+} from '../../services/adminMessages.service';
 import { teachersService } from '../../services/teachers.service';
 import { coursesService } from '../../services/courses.service';
 import { publicTeacherName } from '../../utils/teacherName';
@@ -50,6 +55,7 @@ export default function UserMessagesScreen() {
   const navigation = useNavigation();
   const user = authService.getCurrentUser();
   const [selectedConv, setSelectedConv] = useState<EnrichedConversation | null>(null);
+  const [koureoOpen, setKoureoOpen] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [search, setSearch] = useState('');
   const [, setTick] = useState(0);
@@ -57,10 +63,12 @@ export default function UserMessagesScreen() {
 
   useEffect(() => {
     const unsubConv = messagingService.onChange(() => setTick((t) => t + 1));
+    const unsubKoureo = adminMessagesService.onChange(() => setTick((t) => t + 1));
     // Force a reload in case cache is stale
     messagingService.loadConversations().catch(() => {});
-    return unsubConv;
-  }, []);
+    if (user) adminMessagesService.load(user.id).catch(() => {});
+    return () => { unsubConv(); unsubKoureo(); };
+  }, [user?.id]);
 
   const enriched: EnrichedConversation[] = useMemo(() => {
     if (!user) return [];
@@ -86,6 +94,17 @@ export default function UserMessagesScreen() {
           c.courseName.toLowerCase().includes(search.toLowerCase())
       )
     : enriched;
+
+  // Fil "Koureo équipe" épinglé en tête de liste — masqué seulement quand la
+  // recherche ne matche pas son nom.
+  const showKoureoRow =
+    !search || 'koureo équipe'.includes(search.toLowerCase().trim());
+
+  if (koureoOpen && user) {
+    return (
+      <KoureoThreadView userId={user.id} onBack={() => setKoureoOpen(false)} />
+    );
+  }
 
   if (selectedConv) {
     return (
@@ -148,10 +167,12 @@ export default function UserMessagesScreen() {
         />
       </View>
 
+      {showKoureoRow && <KoureoRow onPress={() => setKoureoOpen(true)} />}
+
       {filtered.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>◎</Text>
-          <Text style={styles.emptyTitle}>Aucun message</Text>
+          <Text style={styles.emptyTitle}>Aucune conversation</Text>
           <Text style={styles.emptyText}>
             Tu pourras contacter tes professeurs après avoir réservé un cours.
           </Text>
@@ -176,6 +197,173 @@ export default function UserMessagesScreen() {
         />
       )}
     </View>
+  );
+}
+
+// ── Fil "Koureo équipe" (table admin_messages) ─────────────────────────────
+
+function KoureoRow({ onPress }: { onPress: () => void }) {
+  const last = adminMessagesService.lastMessage();
+  const unread = adminMessagesService.countUnread() > 0;
+  return (
+    <View style={styles.list}>
+      <TouchableOpacity style={styles.convRow} activeOpacity={0.9} onPress={onPress}>
+        <View style={[styles.avatar, styles.koureoAvatar]}>
+          <Ionicons name="shield-checkmark" size={24} color={colors.textInverse} />
+        </View>
+        <View style={styles.convContent}>
+          <View style={styles.convTop}>
+            <View style={styles.nameRow}>
+              <Text style={[styles.convName, unread && styles.convNameUnread]}>
+                Koureo équipe
+              </Text>
+              <View style={styles.koureoBadge}>
+                <Text style={styles.koureoBadgeText}>Officiel</Text>
+              </View>
+            </View>
+            {last && <Text style={styles.convTime}>{formatShort(last.createdAt)}</Text>}
+          </View>
+          <Text style={styles.convCourse}>Messages officiels de l'équipe</Text>
+          <Text
+            style={[styles.convMessage, unread && styles.convMessageUnread]}
+            numberOfLines={1}
+          >
+            {last?.body ?? 'Une question ? Écris à l’équipe Koureo.'}
+          </Text>
+        </View>
+        {unread && <View style={styles.unreadDot} />}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function KoureoThreadView({
+  userId,
+  onBack,
+}: {
+  userId: string;
+  onBack: () => void;
+}) {
+  const [, setTick] = useState(0);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    const unsub = adminMessagesService.onChange(() => setTick((t) => t + 1));
+    // Recharge le fil puis marque les messages de l'équipe comme lus.
+    adminMessagesService
+      .load(userId)
+      .then(() => adminMessagesService.markRead(userId))
+      .catch(() => {});
+    return unsub;
+  }, [userId]);
+
+  const messages: AdminMessage[] = adminMessagesService.list();
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try {
+      await adminMessagesService.send(userId, body);
+      setDraft('');
+    } catch (e) {
+      // L'échec reste silencieux côté UI (comme les conversations profs) —
+      // le message d'erreur part dans les logs.
+      console.warn('koureo send:', (e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View style={styles.convHeader}>
+        <TouchableOpacity onPress={onBack}>
+          <Text style={styles.back}>←</Text>
+        </TouchableOpacity>
+        <View style={styles.convHeaderInfo}>
+          <View style={[styles.convHeaderAvatar, styles.koureoAvatar]}>
+            <Ionicons name="shield-checkmark" size={18} color={colors.textInverse} />
+          </View>
+          <View>
+            <View style={styles.nameRow}>
+              <Text style={styles.convHeaderName}>Koureo équipe</Text>
+              <View style={styles.koureoBadge}>
+                <Text style={styles.koureoBadgeText}>Officiel</Text>
+              </View>
+            </View>
+            <Text style={styles.convHeaderCourse}>
+              Messages officiels de l'équipe
+            </Text>
+          </View>
+        </View>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <View style={styles.convModBanner}>
+        <Text style={styles.convModText}>
+          ◆ Fil officiel Koureo · Tu peux répondre à l'équipe ici
+        </Text>
+      </View>
+
+      <ScrollView
+        style={styles.messagesScroll}
+        contentContainerStyle={styles.messagesContent}
+      >
+        {messages.length === 0 && (
+          <View style={styles.emptyChat}>
+            <Text style={styles.emptyChatText}>
+              Pas encore de message. Une question sur Koureo ? Écris à l'équipe,
+              elle te répond ici.
+            </Text>
+          </View>
+        )}
+        {messages.map((msg) => {
+          const isMe = msg.sender === 'user';
+          return (
+            <View key={msg.id} style={[styles.msgRow, isMe && styles.msgRowMe]}>
+              <View
+                style={[
+                  styles.msgBubble,
+                  isMe ? styles.msgBubbleMe : styles.msgBubbleThem,
+                ]}
+              >
+                <Text style={[styles.msgText, isMe && styles.msgTextMe]}>
+                  {msg.body}
+                </Text>
+              </View>
+              <Text style={styles.msgTime}>{formatShort(msg.createdAt)}</Text>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      <View style={styles.inputBar}>
+        <TextInput
+          style={styles.msgInput}
+          placeholder="Répondre à l'équipe Koureo…"
+          placeholderTextColor={colors.textLight}
+          value={draft}
+          onChangeText={setDraft}
+          multiline
+          editable={!sending}
+        />
+        <TouchableOpacity
+          style={[
+            styles.sendBtn,
+            (!draft.trim() || sending) && styles.sendBtnDisabled,
+          ]}
+          onPress={send}
+          disabled={!draft.trim() || sending}
+        >
+          <Text style={styles.sendBtnText}>↑</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -462,6 +650,25 @@ const styles = StyleSheet.create({
   convMessage: { fontSize: 13, color: colors.textSecondary, marginTop: 3 },
   convMessageUnread: { color: colors.text, fontWeight: '500' },
   unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+
+  // Fil "Koureo équipe"
+  koureoAvatar: {
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  koureoBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
+  },
+  koureoBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primaryDark,
+    letterSpacing: 0.3,
+  },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   emptyIcon: { fontSize: 48, color: colors.textLight, marginBottom: spacing.md },

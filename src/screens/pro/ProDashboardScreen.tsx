@@ -18,7 +18,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { authService } from '../../services/auth.service';
-import { getProDashboard } from '../../data/mockDashboard';
+import { dashboardService } from '../../services/dashboard.service';
 import { coursesService } from '../../services/courses.service';
 import { bookingsService } from '../../services/bookings.service';
 import { manualParticipantsService } from '../../services/manualParticipants.service';
@@ -43,7 +43,6 @@ export default function ProDashboardScreen() {
   const [stats, setStats] = useState<ProDashboardStats | null>(null);
   const [pointsTotal, setPointsTotal] = useState<number>(0);
   const [unread, setUnread] = useState<number>(0);
-  const [recentBookings, setRecentBookings] = useState<number>(0);
   // Hoisted above the early-return below — adding them later in the render
   // function would change hook count between renders and React throws
   // "Rendered more hooks than during the previous render".
@@ -58,19 +57,17 @@ export default function ProDashboardScreen() {
     return () => { u1(); u2(); };
   }, []);
 
-  // Recompute stats every focus AND every tick. The previous version only
-  // listened to `teacherId` changes, so when the courses cache hydrated after
-  // the dashboard mounted, `stats.nextSession` stayed `undefined` even though
-  // sessions existed in Supabase — which is what the "Aucune session à venir"
-  // empty state was actually surfacing.
+  // Reload the stats from Supabase every tick (a booking or a session changed
+  // locally) and on teacher resolution. The cached value paints immediately
+  // while the fresh query runs.
   useEffect(() => {
     if (!teacherId) return;
-    setStats(getProDashboard(teacherId));
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const recent = bookingsService
-      .listForTeacher(teacherId)
-      .filter((b) => new Date(b.createdAt).getTime() >= weekAgo).length;
-    setRecentBookings(recent);
+    setStats(dashboardService.get(teacherId) ?? null);
+    dashboardService.load(teacherId).catch(() => {});
+    const unsub = dashboardService.onChange(() => {
+      setStats(dashboardService.get(teacherId) ?? null);
+    });
+    return unsub;
   }, [teacherId, tick]);
 
   useFocusEffect(
@@ -78,7 +75,7 @@ export default function ProDashboardScreen() {
       // Refresh on tab re-focus too — handles "I just booked a class on the
       // web while the dashboard was idle" without waiting for the next tick.
       if (!teacherId) return;
-      setStats(getProDashboard(teacherId));
+      dashboardService.load(teacherId).catch(() => {});
     }, [teacherId]),
   );
 
@@ -136,6 +133,7 @@ export default function ProDashboardScreen() {
     );
   }
 
+  const recentBookings = stats.recentBookings;
   const nextFillRatio = next ? nextRealCount / Math.max(1, next.maxParticipants) : 0;
   const nextIsLow = next ? nextFillRatio < LOW_FILL_THRESHOLD : false;
   const firstName = (teacher.displayName ?? '').trim().split(/\s+/)[0] ?? '';
@@ -175,9 +173,10 @@ export default function ProDashboardScreen() {
   const handleRemoveBoost = async () => {
     if (!next) return;
     try {
+      // promoPrice omis → la colonne promo_price repasse à NULL côté Supabase
+      // (updateSessionPromo envoie `promo.promoPrice ?? null`).
       await coursesService.updateSessionPromo(next.id, {
         promoActive: false,
-        promoPrice: null,
         promoExpiresAt: null,
       });
       setBoostOpen(false);
