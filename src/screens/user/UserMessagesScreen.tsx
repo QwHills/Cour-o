@@ -27,7 +27,6 @@ import {
   AdminMessage,
 } from '../../services/adminMessages.service';
 import { teachersService } from '../../services/teachers.service';
-import { coursesService } from '../../services/courses.service';
 import { publicTeacherName } from '../../utils/teacherName';
 import { offerSuggestionsService, OfferSuggestionRow } from '../../services/offerSuggestions.service';
 import { formatTimeLabel, formatDateLabel } from '../../utils/date';
@@ -36,8 +35,6 @@ interface EnrichedConversation {
   id: string;
   raw: Conversation;
   teacher: TeacherProfile | undefined;
-  courseName: string;
-  courseDate: string;
 }
 
 function formatShort(iso: string): string {
@@ -74,24 +71,17 @@ export default function UserMessagesScreen() {
     if (!user) return [];
     return messagingService.listForUser(user.id).map((c) => {
       const teacher = teachersService.getCached(c.teacherId);
-      const cls = c.classId ? coursesService.getClass(c.classId) : undefined;
       return {
         id: c.id,
         raw: c,
         teacher,
-        courseName: cls?.title ?? 'Conversation',
-        courseDate: cls
-          ? ''
-          : '',
       };
     });
   }, [user?.id, user]);
 
   const filtered = search
-    ? enriched.filter(
-        (c) =>
-          (c.teacher?.displayName ?? '').toLowerCase().includes(search.toLowerCase()) ||
-          c.courseName.toLowerCase().includes(search.toLowerCase())
+    ? enriched.filter((c) =>
+        (c.teacher?.displayName ?? '').toLowerCase().includes(search.toLowerCase())
       )
     : enriched;
 
@@ -402,7 +392,6 @@ function ConversationRow({
             {last ? formatShort(last.createdAt) : formatShort(conv.raw.lastMessageAt)}
           </Text>
         </View>
-        <Text style={styles.convCourse}>{conv.courseName}</Text>
         <Text
           style={[styles.convMessage, unread && styles.convMessageUnread]}
           numberOfLines={1}
@@ -484,7 +473,6 @@ function ConversationView({
                 <TeacherBadge status={conv.teacher.status} small />
               )}
             </View>
-            <Text style={styles.convHeaderCourse}>{conv.courseName}</Text>
           </View>
         </View>
         <View style={{ width: 24 }} />
@@ -508,13 +496,6 @@ function ConversationView({
           </View>
         )}
         {messages.map((msg) => {
-          if (msg.senderRole === 'system') {
-            return (
-              <View key={msg.id} style={styles.systemMsg}>
-                <Text style={styles.systemMsgText}>{msg.body}</Text>
-              </View>
-            );
-          }
           const isMe = msg.senderRole === 'user';
           const suggestion = suggestionsByMessageId.get(msg.id);
           return (
@@ -750,16 +731,6 @@ const styles = StyleSheet.create({
   },
   suggestionCtaText: { fontSize: 13, color: '#FFFFFF', fontWeight: '700', flex: 1 },
   suggestionCtaChevron: { fontSize: 18, color: '#FFFFFF', fontWeight: '700' },
-
-  systemMsg: { alignItems: 'center', paddingVertical: spacing.sm },
-  systemMsgText: {
-    fontSize: 11,
-    color: colors.textLight,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    lineHeight: 16,
-    maxWidth: '80%',
-  },
 
   inputBar: {
     flexDirection: 'row',

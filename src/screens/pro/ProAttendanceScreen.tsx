@@ -244,7 +244,7 @@ export default function ProAttendanceScreen() {
   const [msgSending, setMsgSending] = useState(false);
   // Recipients = bookings only (manual walk-ins don't have a user_id).
   const bookingRecipients = useMemo(() => {
-    if (!active || !teacherId) return [] as Array<{ userId: string; classId: string }>;
+    if (!active || !teacherId) return [] as Array<{ userId: string }>;
     return bookingsService
       .listForTeacher(teacherId)
       .filter(
@@ -252,7 +252,7 @@ export default function ProAttendanceScreen() {
           b.sessionId === active.session.id &&
           (b.status === 'confirmed' || b.status === 'completed'),
       )
-      .map((b) => ({ userId: b.userId, classId: b.classId }));
+      .map((b) => ({ userId: b.userId }));
   }, [active, teacherId]);
 
   const handleSendCollective = async () => {
@@ -271,7 +271,6 @@ export default function ProAttendanceScreen() {
         const conv = await messagingService.getOrCreateConversation(
           r.userId,
           teacherId,
-          r.classId,
         );
         await messagingService.sendMessage(conv.id, 'teacher', trimmed);
         okCount += 1;

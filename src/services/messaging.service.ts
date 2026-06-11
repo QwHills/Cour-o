@@ -1,16 +1,32 @@
-// Messaging service — Supabase-backed
-// Tables: conversations (user_id + teacher_id + optional class_id) + messages (conversation_id)
+// Messaging service — Supabase-backed sur la table canonique `direct_messages`
+// (la même que le site koureo.fr). Une « conversation » n'est plus une ligne
+// persistée : c'est la paire (teacher_id, student_id) dérivée des messages.
+//
+// Schéma direct_messages :
+//   teacher_id  → teacher_profiles.id (PAS users.id)
+//   student_id  → users.id (= auth.uid() de l'élève)
+//   sender_role → 'teacher' | 'student'
+//   read_at     → null tant que le destinataire n'a pas lu
+//
+// Côté API publique on garde les rôles historiques de l'app ('user'/'teacher')
+// et on traduit 'user' ↔ 'student' au niveau des requêtes.
 import { supabase } from './supabase/client';
 
-export type SenderRole = 'user' | 'teacher' | 'system';
+export type SenderRole = 'user' | 'teacher';
+
+type DbSenderRole = 'teacher' | 'student';
 
 export interface Conversation {
+  /** Id synthétique `${teacherId}:${studentId}` — pas de ligne en DB. */
   id: string;
+  /** users.id de l'élève. */
   userId: string;
+  /** teacher_profiles.id du prof. */
   teacherId: string;
-  classId?: string;
   lastMessageAt: string;
+  /** Messages du prof non lus par l'élève. */
   unreadUser: boolean;
+  /** Messages de l'élève non lus par le prof. */
   unreadTeacher: boolean;
 }
 
@@ -19,8 +35,18 @@ export interface Message {
   conversationId: string;
   senderRole: SenderRole;
   body: string;
-  moderated: boolean;
   createdAt: string;
+  readAt: string | null;
+}
+
+interface DirectMessageRow {
+  id: string;
+  teacher_id: string;
+  student_id: string;
+  sender_role: DbSenderRole;
+  body: string;
+  created_at: string;
+  read_at: string | null;
 }
 
 type Listener = () => void;
@@ -31,45 +57,81 @@ function notify() { listeners.forEach((l) => l()); }
 const conversationCache = new Map<string, Conversation>();
 const messagesByConversation = new Map<string, Message[]>();
 
-function rowToConversation(row: any): Conversation {
+function pairId(teacherId: string, userId: string): string {
+  return `${teacherId}:${userId}`;
+}
+
+function parsePairId(conversationId: string): { teacherId: string; userId: string } {
+  const sep = conversationId.indexOf(':');
   return {
-    id: row.id,
-    userId: row.user_id,
-    teacherId: row.teacher_id,
-    classId: row.class_id ?? undefined,
-    lastMessageAt: row.last_message_at,
-    unreadUser: !!row.unread_user,
-    unreadTeacher: !!row.unread_teacher,
+    teacherId: conversationId.slice(0, sep),
+    userId: conversationId.slice(sep + 1),
   };
 }
 
-function rowToMessage(row: any): Message {
+function toAppRole(role: DbSenderRole): SenderRole {
+  return role === 'student' ? 'user' : 'teacher';
+}
+
+function toDbRole(role: SenderRole): DbSenderRole {
+  return role === 'user' ? 'student' : 'teacher';
+}
+
+function rowToMessage(row: DirectMessageRow): Message {
   return {
     id: row.id,
-    conversationId: row.conversation_id,
-    senderRole: row.sender_role as SenderRole,
+    conversationId: pairId(row.teacher_id, row.student_id),
+    senderRole: toAppRole(row.sender_role),
     body: row.body,
-    moderated: !!row.moderated,
     createdAt: row.created_at,
+    readAt: row.read_at,
+  };
+}
+
+/** Recalcule la fiche conversation d'une paire à partir de ses messages. */
+function rebuildConversation(conversationId: string): Conversation {
+  const { teacherId, userId } = parsePairId(conversationId);
+  const messages = messagesByConversation.get(conversationId) ?? [];
+  const last = messages[messages.length - 1];
+  const existing = conversationCache.get(conversationId);
+  return {
+    id: conversationId,
+    userId,
+    teacherId,
+    lastMessageAt:
+      last?.createdAt ?? existing?.lastMessageAt ?? new Date().toISOString(),
+    unreadUser: messages.some((m) => m.senderRole === 'teacher' && !m.readAt),
+    unreadTeacher: messages.some((m) => m.senderRole === 'user' && !m.readAt),
   };
 }
 
 export const messagingService = {
-  // Hydrate conversations for a user or teacher (RLS filters visible rows)
+  // Hydrate toutes les conversations visibles (RLS filtre côté serveur :
+  // l'élève voit ses fils, le prof ceux de son teacher_profile).
   async loadConversations(): Promise<Conversation[]> {
     const { data, error } = await supabase
-      .from('conversations')
-      .select('*')
-      .order('last_message_at', { ascending: false });
+      .from('direct_messages')
+      .select('id, teacher_id, student_id, sender_role, body, created_at, read_at')
+      .order('created_at', { ascending: true })
+      .limit(2000);
     if (error) {
       console.warn('load conversations:', error.message);
       return [];
     }
+
     conversationCache.clear();
-    const list = (data ?? []).map(rowToConversation);
-    list.forEach((c) => conversationCache.set(c.id, c));
+    messagesByConversation.clear();
+    for (const row of (data ?? []) as DirectMessageRow[]) {
+      const msg = rowToMessage(row);
+      const list = messagesByConversation.get(msg.conversationId);
+      if (list) list.push(msg);
+      else messagesByConversation.set(msg.conversationId, [msg]);
+    }
+    for (const id of messagesByConversation.keys()) {
+      conversationCache.set(id, rebuildConversation(id));
+    }
     notify();
-    return list;
+    return this.listConversations();
   },
 
   listConversations(): Conversation[] {
@@ -90,66 +152,47 @@ export const messagingService = {
     return conversationCache.get(id);
   },
 
-  // Create or return existing conversation for (user, teacher, class) triple
+  // Prépare (localement) la conversation d'une paire (élève, prof). Aucune
+  // écriture en DB : le fil n'existera côté serveur qu'au premier message.
   async getOrCreateConversation(
     userId: string,
-    teacherId: string,
-    classId?: string
+    teacherId: string
   ): Promise<Conversation> {
-    // Try to find existing
-    const existing = Array.from(conversationCache.values()).find(
-      (c) =>
-        c.userId === userId &&
-        c.teacherId === teacherId &&
-        (c.classId ?? null) === (classId ?? null)
-    );
+    const id = pairId(teacherId, userId);
+    const existing = conversationCache.get(id);
     if (existing) return existing;
 
-    const { data, error } = await supabase
-      .from('conversations')
-      .insert({
-        user_id: userId,
-        teacher_id: teacherId,
-        class_id: classId ?? null,
-      })
-      .select()
-      .single();
-    if (error || !data) {
-      // Could be a unique-constraint race — try to fetch
-      const { data: fetched } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('teacher_id', teacherId)
-        .eq('class_id', classId ?? null)
-        .maybeSingle();
-      if (fetched) {
-        const c = rowToConversation(fetched);
-        conversationCache.set(c.id, c);
-        notify();
-        return c;
-      }
-      throw new Error(error?.message ?? 'Conversation creation failed');
-    }
-    const c = rowToConversation(data);
-    conversationCache.set(c.id, c);
+    const conv: Conversation = {
+      id,
+      userId,
+      teacherId,
+      lastMessageAt: new Date().toISOString(),
+      unreadUser: false,
+      unreadTeacher: false,
+    };
+    conversationCache.set(id, conv);
     notify();
-    return c;
+    return conv;
   },
 
   // Messages
   async loadMessages(conversationId: string): Promise<Message[]> {
+    const { teacherId, userId } = parsePairId(conversationId);
     const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
+      .from('direct_messages')
+      .select('id, teacher_id, student_id, sender_role, body, created_at, read_at')
+      .eq('teacher_id', teacherId)
+      .eq('student_id', userId)
       .order('created_at', { ascending: true });
     if (error) {
       console.warn('load messages:', error.message);
       return [];
     }
-    const list = (data ?? []).map(rowToMessage);
+    const list = ((data ?? []) as DirectMessageRow[]).map(rowToMessage);
     messagesByConversation.set(conversationId, list);
+    if (list.length > 0 || conversationCache.has(conversationId)) {
+      conversationCache.set(conversationId, rebuildConversation(conversationId));
+    }
     notify();
     return list;
   },
@@ -163,56 +206,56 @@ export const messagingService = {
     senderRole: SenderRole,
     body: string
   ): Promise<Message> {
+    const { teacherId, userId } = parsePairId(conversationId);
     const { data, error } = await supabase
-      .from('messages')
+      .from('direct_messages')
       .insert({
-        conversation_id: conversationId,
-        sender_role: senderRole,
+        teacher_id: teacherId,
+        student_id: userId,
+        sender_role: toDbRole(senderRole),
         body,
       })
-      .select()
+      .select('id, teacher_id, student_id, sender_role, body, created_at, read_at')
       .single();
     if (error || !data) throw new Error(error?.message ?? 'Envoi du message échoué');
 
-    const msg = rowToMessage(data);
+    const msg = rowToMessage(data as DirectMessageRow);
     const existing = messagesByConversation.get(conversationId) ?? [];
     messagesByConversation.set(conversationId, [...existing, msg]);
-
-    // Bump conversation unread flag + last_message_at
-    const otherUnread =
-      senderRole === 'user' ? { unread_teacher: true } : { unread_user: true };
-    await supabase
-      .from('conversations')
-      .update({
-        last_message_at: new Date().toISOString(),
-        ...otherUnread,
-      })
-      .eq('id', conversationId);
-
-    // Refresh conversation row in cache
-    const { data: convRow } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('id', conversationId)
-      .single();
-    if (convRow) conversationCache.set(conversationId, rowToConversation(convRow));
-
+    conversationCache.set(conversationId, rebuildConversation(conversationId));
     notify();
     return msg;
   },
 
-  async markRead(conversationId: string, asRole: 'user' | 'teacher'): Promise<void> {
-    const field = asRole === 'user' ? 'unread_user' : 'unread_teacher';
-    const c = conversationCache.get(conversationId);
-    if (c) {
-      conversationCache.set(conversationId, {
-        ...c,
-        unreadUser: asRole === 'user' ? false : c.unreadUser,
-        unreadTeacher: asRole === 'teacher' ? false : c.unreadTeacher,
-      });
-      notify();
+  // Marque comme lus les messages entrants (= envoyés par l'AUTRE rôle).
+  async markRead(conversationId: string, asRole: SenderRole): Promise<void> {
+    const { teacherId, userId } = parsePairId(conversationId);
+    const incomingDbRole: DbSenderRole = asRole === 'user' ? 'teacher' : 'student';
+    const incomingAppRole: SenderRole = asRole === 'user' ? 'teacher' : 'user';
+    const now = new Date().toISOString();
+
+    // Mise à jour optimiste du cache local.
+    const messages = messagesByConversation.get(conversationId);
+    if (messages) {
+      messagesByConversation.set(
+        conversationId,
+        messages.map((m) =>
+          m.senderRole === incomingAppRole && !m.readAt ? { ...m, readAt: now } : m
+        )
+      );
     }
-    await supabase.from('conversations').update({ [field]: false }).eq('id', conversationId);
+    if (conversationCache.has(conversationId)) {
+      conversationCache.set(conversationId, rebuildConversation(conversationId));
+    }
+    notify();
+
+    await supabase
+      .from('direct_messages')
+      .update({ read_at: now })
+      .eq('teacher_id', teacherId)
+      .eq('student_id', userId)
+      .eq('sender_role', incomingDbRole)
+      .is('read_at', null);
   },
 
   onChange(listener: Listener): () => void {

@@ -19,7 +19,6 @@ import {
   Message,
 } from '../../services/messaging.service';
 import { teachersService } from '../../services/teachers.service';
-import { coursesService } from '../../services/courses.service';
 import { supabase } from '../../services/supabase/client';
 import { authService } from '../../services/auth.service';
 import { formatTimeLabel, formatDateLabel } from '../../utils/date';
@@ -30,7 +29,6 @@ interface EnrichedConversation {
   raw: Conversation;
   participantName: string;
   participantEmail: string;
-  courseName: string;
 }
 
 function formatShort(iso: string): string {
@@ -101,13 +99,11 @@ export default function ProMessagesScreen() {
     if (!teacherId) return [];
     return messagingService.listForTeacher(teacherId).map((c) => {
       const u = userCache.get(c.userId);
-      const cls = c.classId ? coursesService.getClass(c.classId) : undefined;
       return {
         id: c.id,
         raw: c,
         participantName: u?.name ?? 'Participant',
         participantEmail: u?.email ?? '',
-        courseName: cls?.title ?? 'Conversation',
       };
     });
   }, [teacherId]);
@@ -218,7 +214,6 @@ function ConversationRow({
             {last ? formatShort(last.createdAt) : formatShort(conv.raw.lastMessageAt)}
           </Text>
         </View>
-        <Text style={styles.convCourse}>{conv.courseName}</Text>
         <Text
           style={[styles.convMessage, unread && styles.convMessageUnread]}
           numberOfLines={1}
@@ -267,7 +262,6 @@ function ConversationView({
           </View>
           <View>
             <Text style={styles.convHeaderName}>{conv.participantName}</Text>
-            <Text style={styles.convHeaderCourse}>{conv.courseName}</Text>
           </View>
         </View>
         <View style={{ width: 24 }} />
@@ -291,13 +285,6 @@ function ConversationView({
           </View>
         )}
         {messages.map((msg) => {
-          if (msg.senderRole === 'system') {
-            return (
-              <View key={msg.id} style={styles.systemMsg}>
-                <Text style={styles.systemMsgText}>{msg.body}</Text>
-              </View>
-            );
-          }
           const isMe = msg.senderRole === 'teacher';
           return (
             <View key={msg.id} style={[styles.msgRow, isMe && styles.msgRowMe]}>
@@ -399,7 +386,6 @@ const styles = StyleSheet.create({
   convName: { fontSize: 15, fontWeight: '600', color: colors.text },
   convNameUnread: { fontWeight: '700' },
   convTime: { fontSize: 12, color: colors.textLight },
-  convCourse: { fontSize: 11, color: colors.textLight, marginTop: 1, letterSpacing: 0.3 },
   convMessage: { fontSize: 13, color: colors.textSecondary, marginTop: 3 },
   convMessageUnread: { color: colors.text, fontWeight: '500' },
   unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.proAccent },
@@ -431,7 +417,6 @@ const styles = StyleSheet.create({
   },
   convHeaderAvatar: { width: 36, height: 36, borderRadius: 18 },
   convHeaderName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  convHeaderCourse: { fontSize: 11, color: colors.textSecondary },
 
   convModBanner: {
     backgroundColor: colors.surface,
@@ -471,15 +456,6 @@ const styles = StyleSheet.create({
   msgText: { fontSize: 14, color: colors.text, lineHeight: 20 },
   msgTextMe: { color: '#FFFFFF' },
   msgTime: { fontSize: 10, color: colors.textLight, marginTop: 2 },
-  systemMsg: { alignItems: 'center', paddingVertical: spacing.sm },
-  systemMsgText: {
-    fontSize: 11,
-    color: colors.textLight,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    lineHeight: 16,
-    maxWidth: '80%',
-  },
 
   inputBar: {
     flexDirection: 'row',
