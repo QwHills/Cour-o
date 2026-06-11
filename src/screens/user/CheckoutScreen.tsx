@@ -136,13 +136,12 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // Paid course → Stripe PaymentSheet flow with the total (unitPrice × count)
+      // Paid course → Stripe PaymentSheet flow. Le montant est recalculé côté
+      // serveur depuis les séances (jamais envoyé par le client).
       console.log('[checkout] step 1: createPaymentSheet …');
       const sheet = await withTimeout(
         paymentsService.createPaymentSheet({
-          amount: totalPrice,
-          currency: 'eur',
-          bookingReference: `session_multi_${sessions.map((s) => s.id).join('_')}`,
+          sessionIds: sessions.map((s) => s.id),
         }),
         15000,
         'Le serveur de paiement ne répond pas (timeout 15s).',

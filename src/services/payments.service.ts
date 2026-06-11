@@ -48,17 +48,16 @@ export interface PaymentSheetParams {
 
 export const paymentsService = {
   // ─── Call Supabase Edge Function to create a PaymentIntent server-side ───
-  async createPaymentSheet(input: {
-    amount: number; // in EUR, decimal (e.g. 15.00)
-    currency?: 'eur';
-    bookingReference: string;
-  }): Promise<PaymentSheetParams> {
+  // SÉCURITÉ : on n'envoie QUE des identifiants (séances ou produit) ; le
+  // montant, la promo et la commission sont recalculés côté serveur.
+  async createPaymentSheet(
+    input: { sessionIds: string[] } | { productId: string },
+  ): Promise<PaymentSheetParams> {
     const { data, error } = await supabase.functions.invoke('create-payment-intent', {
-      body: {
-        amount: Math.round(input.amount * 100), // Stripe expects cents
-        currency: input.currency ?? 'eur',
-        bookingReference: input.bookingReference,
-      },
+      body:
+        'productId' in input
+          ? { product_id: input.productId }
+          : { session_ids: input.sessionIds },
     });
     if (error) {
       // Try to surface the real HTTP status + body for easier debugging.

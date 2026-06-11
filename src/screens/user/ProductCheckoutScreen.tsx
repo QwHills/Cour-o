@@ -79,11 +79,9 @@ export default function ProductCheckoutScreen() {
       const user = authService.getCurrentUser();
       if (!user) throw new Error('Utilisateur non connecté');
 
-      // Stripe PaymentSheet
+      // Stripe PaymentSheet — le prix est relu côté serveur depuis la DB
       const sheet = await paymentsService.createPaymentSheet({
-        amount: product.price,
-        currency: 'eur',
-        bookingReference: `product_${product.id}`,
+        productId: product.id,
       });
       const { error: initError } = await initPaymentSheet({
         merchantDisplayName: 'Koureo',
