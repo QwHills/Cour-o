@@ -35,6 +35,15 @@ export interface MapViewSectionProps {
    *  for suppressing the viewport-driven reordering while this animates to
    *  avoid feedback loops. */
   focusLocation?: { latitude: number; longitude: number } | null;
+  /** Bumped by the parent every time it wants to re-trigger the fly-to,
+   *  even when the destination latitude/longitude is unchanged (e.g. the
+   *  user taps the "locate me" FAB twice). Without this the useEffect deps
+   *  see identical primitives and skip the animation. */
+  focusKey?: number;
+  /** When set, render a "blue dot" at the user's current GPS position.
+   *  Driven by our own locationService so we get the same dot on iOS and web
+   *  without depending on iOS Core Location's `showsUserLocation` quirks. */
+  userLocation?: { latitude: number; longitude: number } | null;
 }
 
 export default function MapViewSection({
@@ -44,11 +53,15 @@ export default function MapViewSection({
   onMarkerPress,
   onRegionChange,
   focusLocation,
+  focusKey,
+  userLocation,
 }: MapViewSectionProps) {
   const mapRef = useRef<MapView>(null);
 
   // Animate camera when the parent asks us to focus a specific location
-  // (e.g. the user just swiped to a new card in the bottom carousel).
+  // (e.g. the user just swiped to a new card in the bottom carousel, or
+  // tapped the "locate me" FAB). `focusKey` is included in the deps so
+  // identical-coord requests still trigger the animation.
   useEffect(() => {
     if (!focusLocation || !mapRef.current) return;
     mapRef.current.animateToRegion(
@@ -60,9 +73,9 @@ export default function MapViewSection({
       },
       600,
     );
-    // initialRegion deltas are stable; we only react to focusLocation
+    // initialRegion deltas are stable; we only react to focusLocation+focusKey
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusLocation?.latitude, focusLocation?.longitude]);
+  }, [focusLocation?.latitude, focusLocation?.longitude, focusKey]);
 
   return (
     <MapView
@@ -70,7 +83,9 @@ export default function MapViewSection({
       style={StyleSheet.absoluteFill}
       initialRegion={initialRegion}
       provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-      showsUserLocation
+      // Rendering our own blue dot below — disable the native one to avoid
+      // duplicates (the iOS Core Location one was also flaky in simulator).
+      showsUserLocation={false}
       showsMyLocationButton={false}
       onRegionChangeComplete={onRegionChange}
     >
@@ -94,6 +109,22 @@ export default function MapViewSection({
           </View>
         </Marker>
       ))}
+
+      {/* User position — drawn after course markers so it sits on top. */}
+      {userLocation && (
+        <Marker
+          coordinate={userLocation}
+          anchor={{ x: 0.5, y: 0.5 }}
+          // Cannot be tapped — purely decorative.
+          tracksViewChanges={false}
+        >
+          <View style={styles.userHalo}>
+            <View style={styles.userRing}>
+              <View style={styles.userDot} />
+            </View>
+          </View>
+        </Marker>
+      )}
     </MapView>
   );
 }
@@ -139,5 +170,34 @@ const styles = StyleSheet.create({
     borderRightColor: 'transparent',
     borderTopColor: '#FFFFFF',
     marginTop: -1,
+  },
+
+  // User-position marker — Apple-style: blue dot + white ring + soft halo
+  userHalo: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(10, 132, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userRing: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 4,
+  },
+  userDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#0A84FF', // iOS system blue
   },
 });

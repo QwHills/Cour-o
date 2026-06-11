@@ -3,6 +3,7 @@
 import { supabase } from './supabase/client';
 import { teachersService } from './teachers.service';
 import { calendarService } from './calendar.service';
+import { locationService } from './location.service';
 import {
   ClassOffer,
   ClassSession,
@@ -34,8 +35,15 @@ export interface EnrichedCourse {
   spotsLeft: number;
 }
 
+// Legacy constants — kept for backwards-compat with callers that imported
+// them directly. Prefer `locationService.getCurrent()` for live coords.
 export const USER_LAT = 48.1113;
 export const USER_LNG = -1.68;
+
+// Re-enrich + notify whenever the user's location resolves or refreshes —
+// otherwise distance labels stay stuck on the Rennes fallback after the OS
+// prompt is answered.
+locationService.onChange(() => notify());
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -300,6 +308,73 @@ export const coursesService = {
     }
   },
 
+  // Quick-add a single session to an existing class. Used by the mobile
+   // "Ajouter une session" flow — does NOT create or modify the class itself
+   // (full class creation stays on the web admin).
+  async createSession(input: {
+    classId: string;
+    startsAt: string;
+    endsAt: string;
+    maxParticipants: number;
+  }): Promise<ClassSession> {
+    const tmpId = `local_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
+    const optimistic: ClassSession = {
+      id: tmpId,
+      classId: input.classId,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      bookedCount: 0,
+      maxParticipants: input.maxParticipants,
+      status: 'open',
+    };
+    cacheSession(optimistic);
+    notify();
+
+    const { data, error } = await supabase
+      .from('class_sessions')
+      .insert({
+        class_id: input.classId,
+        starts_at: input.startsAt,
+        ends_at: input.endsAt,
+        booked_count: 0,
+        max_participants: input.maxParticipants,
+        status: 'open',
+      })
+      .select()
+      .single();
+    if (error) {
+      // Rollback the optimistic insert.
+      sessionCache.delete(tmpId);
+      sessionsByClass.get(input.classId)?.delete(tmpId);
+      notify();
+      throw new Error(error.message);
+    }
+    // Swap the temp id for the server-generated one.
+    if (data?.id && data.id !== tmpId) {
+      sessionCache.delete(tmpId);
+      sessionsByClass.get(input.classId)?.delete(tmpId);
+      cacheSession(rowToSession(data));
+      notify();
+    }
+
+    // Push to the teacher's connected calendar (best-effort, silent on failure).
+    const cls = classCache.get(input.classId);
+    if (cls?.teacherId) {
+      calendarService
+        .syncSessionsToCalendar(cls.teacherId, [
+          {
+            id: data?.id ?? tmpId,
+            title: cls.title,
+            startsAt: input.startsAt,
+            endsAt: input.endsAt,
+          },
+        ])
+        .catch((e) => console.warn('cal createSession:', (e as Error).message));
+    }
+
+    return data ? rowToSession(data) : optimistic;
+  },
+
   // Pro-side session cancellation. Marks the session as cancelled locally
   // (so it disappears from the planning and the booking UI) and pushes the
   // change to Supabase best-effort. Actual refund processing for booked
@@ -453,8 +528,12 @@ function enrich(cls: ClassOffer): EnrichedCourse {
   const teacher = teachersService.getCached(cls.teacherId);
   const sessions = coursesService.getSessions(cls.id);
   const nextSession = sessions[0];
+  // Read the user's current coords each time we enrich — the locationService
+  // calls notify() on change, which re-runs callers' `search()` / `listAll()`
+  // and therefore this function.
+  const userCoords = locationService.getCurrent();
   const distanceMeters = teacher
-    ? computeDistance(USER_LAT, USER_LNG, teacher.latitude, teacher.longitude)
+    ? computeDistance(userCoords.latitude, userCoords.longitude, teacher.latitude, teacher.longitude)
     : 0;
   const spotsLeft = nextSession
     ? nextSession.maxParticipants - nextSession.bookedCount

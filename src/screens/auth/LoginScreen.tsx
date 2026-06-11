@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { authService } from '../../services/auth.service';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import Input from '../../components/ui/Input';
+import PasswordInput from '../../components/ui/PasswordInput';
 import Button from '../../components/ui/Button';
 
 export default function LoginScreen() {
@@ -67,12 +68,11 @@ export default function LoginScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
           />
-          <Input
+          <PasswordInput
             label="Mot de passe"
             placeholder="••••••••"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
           />
         </View>
 

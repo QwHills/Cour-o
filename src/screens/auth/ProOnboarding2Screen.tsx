@@ -8,9 +8,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import * as ImagePicker from 'expo-image-picker';
 import { Category } from '../../types/domain';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import Input from '../../components/ui/Input';
@@ -31,6 +33,9 @@ export default function ProOnboarding2Screen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [showOther, setShowOther] = useState(false);
   const [otherCategory, setOtherCategory] = useState('');
+  // Local file URI picked from the device. Uploaded by the next screen once
+  // the auth account exists (we need a userId to namespace the storage path).
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
 
   const toggleCategory = (cat: Category) => {
     setCategories((prev) =>
@@ -38,14 +43,39 @@ export default function ProOnboarding2Screen() {
     );
   };
 
-  const handleNext = () => {
-    if (categories.length === 0 && !otherCategory.trim()) {
-      Alert.alert('', 'Sélectionne au moins une catégorie.');
+  const handlePickPhoto = async () => {
+    // Permissions are auto-prompted by the picker on iOS; on web the picker
+    // falls back to the standard file <input>.
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') {
+      Alert.alert(
+        'Permission requise',
+        "Autorise l'accès à tes photos dans Réglages pour ajouter une photo de profil.",
+      );
       return;
     }
-    const allCats = [...categories];
-    if (otherCategory.trim()) {
-      allCats.push(otherCategory.trim() as Category);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    setPhotoUri(result.assets[0].uri);
+  };
+
+  const handleNext = () => {
+    // Free-text "Autre" is intentionally NOT pushed into `categories` — the
+    // backend enforces a fixed enum and unknown values fail the insert. We
+    // keep the field as a UI hint we'll route through a moderation flow
+    // later; for now signing up without picking a standard cat blocks the
+    // step (Continue is disabled below).
+    if (categories.length === 0) {
+      Alert.alert(
+        'Catégorie requise',
+        'Sélectionne au moins une catégorie pour continuer.',
+      );
+      return;
     }
     navigation.navigate('ProOnboarding3', {
       name: userName,
@@ -53,7 +83,11 @@ export default function ProOnboarding2Screen() {
       password,
       kind,
       bio,
-      categories: allCats,
+      categories,
+      // Photo URI is a local file:// path on iOS / blob: on web. Onboarding3
+      // could upload it to Storage; for the v1 we pass it straight to
+      // teacher_profiles.photo_url (and let the user replace it later).
+      photoUrl: photoUri,
       isUpgrade,
     });
   };
@@ -81,10 +115,22 @@ export default function ProOnboarding2Screen() {
           Fais bonne impression ! Ces infos seront visibles par les participants.
         </Text>
 
-        {/* Photo placeholder */}
-        <TouchableOpacity style={styles.photoPlaceholder} activeOpacity={0.8}>
-          <Text style={styles.photoEmoji}>📸</Text>
-          <Text style={styles.photoText}>Ajouter une photo</Text>
+        {/* Photo picker — taps open the device picker on iOS, the native
+            file dialog on web. The chosen URI is stored locally; the next
+            step persists it on the teacher profile. */}
+        <TouchableOpacity
+          style={styles.photoPlaceholder}
+          activeOpacity={0.85}
+          onPress={handlePickPhoto}
+        >
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={styles.photoImage} />
+          ) : (
+            <>
+              <Text style={styles.photoEmoji}>📸</Text>
+              <Text style={styles.photoText}>Ajouter une photo</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         {/* Name (read-only, from signup) */}
@@ -203,6 +249,7 @@ const styles = StyleSheet.create({
   },
   photoEmoji: { fontSize: 28, marginBottom: 4 },
   photoText: { fontSize: 10, fontWeight: '600', color: colors.textLight, letterSpacing: 0.3 },
+  photoImage: { width: '100%', height: '100%', borderRadius: 50 },
   nameCard: {
     backgroundColor: colors.surface,
     padding: spacing.md,

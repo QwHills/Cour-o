@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,14 @@ import {
   Dimensions,
   StatusBar,
   TouchableOpacity,
+  FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { publicTeacherName } from '../../utils/teacherName';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { coursesService } from '../../services/courses.service';
 import { bookingsService } from '../../services/bookings.service';
@@ -50,6 +55,32 @@ export default function CourseDetailScreen() {
 
   const { class: cls, teacher: pro, nextSession, distanceLabel, spotsLeft } = course;
   const isIndividual = cls.format === 'individual';
+
+  // Hero photos = class cover + teacher's optional gallery (deduplicated).
+  // We render a swipable FlatList with chevron controls when more than one
+  // image is available so students can browse realizations like Manon's
+  // pastry shots.
+  const heroPhotos: string[] = useMemo(() => {
+    const list: string[] = [];
+    if (cls.imageUrl) list.push(cls.imageUrl);
+    for (const url of pro?.photos?.gallery ?? []) {
+      if (url && !list.includes(url)) list.push(url);
+    }
+    return list;
+  }, [cls.imageUrl, pro?.photos?.gallery]);
+
+  const heroListRef = useRef<FlatList<string>>(null);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const onHeroScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+    if (idx !== heroIndex) setHeroIndex(idx);
+  };
+  const scrollHeroBy = (delta: -1 | 1) => {
+    const next = Math.max(0, Math.min(heroPhotos.length - 1, heroIndex + delta));
+    if (next === heroIndex) return;
+    heroListRef.current?.scrollToOffset({ offset: next * width, animated: true });
+    setHeroIndex(next);
+  };
 
   // Surface products (abos / packs / unité) sold by the owner of this class
   // so the user can buy credits directly from here — same UX as on the
@@ -131,11 +162,61 @@ export default function CourseDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.imageContainer}>
-          <Image source={{ uri: cls.imageUrl }} style={styles.image} />
+          <FlatList
+            ref={heroListRef}
+            data={heroPhotos}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(uri, i) => `${i}-${uri}`}
+            onMomentumScrollEnd={onHeroScroll}
+            renderItem={({ item }) => (
+              <Image source={{ uri: item }} style={styles.image} />
+            )}
+          />
           <LinearGradient
             colors={['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.5)']}
             style={styles.imageGradient}
+            pointerEvents="none"
           />
+
+          {/* Chevron controls — only when more than one photo */}
+          {heroPhotos.length > 1 && heroIndex > 0 && (
+            <TouchableOpacity
+              style={[styles.heroChevron, styles.heroChevronLeft]}
+              activeOpacity={0.8}
+              onPress={() => scrollHeroBy(-1)}
+              hitSlop={8}
+            >
+              <Ionicons name="chevron-back" size={22} color={colors.text} />
+            </TouchableOpacity>
+          )}
+          {heroPhotos.length > 1 && heroIndex < heroPhotos.length - 1 && (
+            <TouchableOpacity
+              style={[styles.heroChevron, styles.heroChevronRight]}
+              activeOpacity={0.8}
+              onPress={() => scrollHeroBy(1)}
+              hitSlop={8}
+            >
+              <Ionicons name="chevron-forward" size={22} color={colors.text} />
+            </TouchableOpacity>
+          )}
+
+          {/* Page dots */}
+          {heroPhotos.length > 1 && (
+            <View style={styles.heroDots} pointerEvents="none">
+              {heroPhotos.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.heroDot,
+                    i === heroIndex && styles.heroDotActive,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -166,7 +247,7 @@ export default function CourseDetailScreen() {
             <Image source={{ uri: pro.photoUrl }} style={styles.proAvatar} />
             <View style={styles.proInfo}>
               <View style={styles.proNameRow}>
-                <Text style={styles.proName}>{pro.displayName}</Text>
+                <Text style={styles.proName}>{publicTeacherName(pro)}</Text>
                 <TeacherBadge status={pro.status} small />
               </View>
               {pro.reviewCount > 0 ? (
@@ -237,7 +318,7 @@ export default function CourseDetailScreen() {
               </View>
               <Text style={offerStyles.offersHint}>
                 Paye moins cher ce cours (et les suivants) en achetant un pack
-                ou un abonnement chez {pro.displayName}.
+                ou un abonnement chez {publicTeacherName(pro)}.
               </Text>
               {products.map((p) => (
                 <CourseProductOfferCard
@@ -400,8 +481,43 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scrollView: { flex: 1 },
   imageContainer: { width, height: IMAGE_HEIGHT },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
+  // Each FlatList item is one full-screen-width image — pagingEnabled snaps
+  // exactly on multiples of `width`, so a fixed pixel width here is required.
+  image: { width, height: IMAGE_HEIGHT, resizeMode: 'cover' },
   imageGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  heroChevron: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -22,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.sm,
+  },
+  heroChevronLeft: { left: spacing.md },
+  heroChevronRight: { right: spacing.md },
+  heroDots: {
+    position: 'absolute',
+    bottom: spacing.md,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  heroDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  heroDotActive: {
+    backgroundColor: '#FFFFFF',
+    width: 18,
+  },
   heartButton: {
     position: 'absolute',
     top: 50,

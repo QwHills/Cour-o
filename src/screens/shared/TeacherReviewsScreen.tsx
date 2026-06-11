@@ -20,6 +20,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { teachersService } from '../../services/teachers.service';
 import { questionnaireService } from '../../services/questionnaire.service';
+import { publicTeacherName } from '../../utils/teacherName';
 import { ValidationQuestionnaire } from '../../types/domain';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import Card from '../../components/ui/Card';
@@ -127,7 +128,7 @@ export default function TeacherReviewsScreen() {
             <Text style={styles.emptyTitle}>Aucun avis pour le moment</Text>
             <Text style={styles.emptyText}>
               {teacher
-                ? `Les participants laisseront un avis après leur cours avec ${teacher.displayName}.`
+                ? `Les participants laisseront un avis après leur cours avec ${publicTeacherName(teacher)}.`
                 : 'Les avis arriveront après les premiers cours.'}
             </Text>
           </Card>

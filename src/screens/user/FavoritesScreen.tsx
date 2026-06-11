@@ -12,10 +12,13 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { favoritesService } from '../../services/favorites.service';
 import { authService } from '../../services/auth.service';
 import { coursesService, EnrichedCourse } from '../../services/courses.service';
+import { locationService } from '../../services/location.service';
+import { userPreferencesService } from '../../services/userPreferences.service';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import FavoriteButton from '../../components/FavoriteButton';
 import TeacherBadge from '../../components/TeacherBadge';
 import { formatDateLabel, formatTimeLabel } from '../../utils/date';
+import { publicTeacherName } from '../../utils/teacherName';
 import { getCategoryColor } from '../../utils/categoryIcons';
 
 export default function FavoritesScreen() {
@@ -33,33 +36,76 @@ export default function FavoritesScreen() {
   }, [user]);
   useEffect(() => coursesService.onChange(() => setTick((t) => t + 1)), []);
 
-  const courses: EnrichedCourse[] = favIds
+  // Discovery radius from user prefs — drops favorites too far from where
+  // the student lives (configurable in Profil → Rayon de recherche).
+  const [radii, setRadii] = useState(userPreferencesService.get());
+  useEffect(() => {
+    const unsub = userPreferencesService.onChange(setRadii);
+    userPreferencesService.hydrate().then(setRadii);
+    return unsub;
+  }, []);
+  // Also re-render when geoloc resolves so the distance gate kicks in.
+  const [userResolved, setUserResolved] = useState(locationService.getCurrent().resolved);
+  useEffect(() => {
+    return locationService.onChange((c) => setUserResolved(c.resolved));
+  }, []);
+
+  const allFavorites: EnrichedCourse[] = favIds
     .map((id) => coursesService.get(id))
     .filter((c): c is EnrichedCourse => c !== null);
+
+  // If location resolved, hide favorites further than the configured radius.
+  // If not resolved yet, show all so we never look empty during the prompt.
+  const courses: EnrichedCourse[] = userResolved
+    ? allFavorites.filter((c) => c.distanceMeters <= radii.favoritesKm * 1000)
+    : allFavorites;
+  const hiddenCount = allFavorites.length - courses.length;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>←</Text>
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Mes favoris</Text>
-        <View style={{ width: 24 }} />
       </View>
 
       {courses.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyHeart}>♡</Text>
-          <Text style={styles.emptyTitle}>Aucun favori pour le moment</Text>
-          <Text style={styles.emptyText}>
-            Appuie sur le cœur d'un cours pour le sauvegarder ici et le retrouver facilement.
-          </Text>
-          <TouchableOpacity
-            style={styles.exploreBtn}
-            onPress={() => navigation.getParent()?.navigate('Explorer')}
-          >
-            <Text style={styles.exploreBtnText}>Explorer les cours</Text>
-          </TouchableOpacity>
+          {hiddenCount > 0 ? (
+            <>
+              <Text style={styles.emptyTitle}>
+                {hiddenCount} favori{hiddenCount > 1 ? 's' : ''} hors du rayon
+              </Text>
+              <Text style={styles.emptyText}>
+                Tes favoris sont à plus de {radii.favoritesKm} km. Élargis le rayon dans Profil → Rayon de recherche.
+              </Text>
+              <TouchableOpacity
+                style={styles.exploreBtn}
+                onPress={() =>
+                  // DiscoveryRadius vit dans le ProfileStack — depuis le tab
+                  // Favoris on remonte au parent pour y plonger.
+                  navigation.getParent()?.navigate('Profil', {
+                    screen: 'DiscoveryRadius',
+                    initial: false,
+                  })
+                }
+              >
+                <Text style={styles.exploreBtnText}>Modifier le rayon</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.emptyTitle}>Aucun favori pour le moment</Text>
+              <Text style={styles.emptyText}>
+                Appuie sur le cœur d'un cours pour le sauvegarder ici et le retrouver facilement.
+              </Text>
+              <TouchableOpacity
+                style={styles.exploreBtn}
+                onPress={() => navigation.getParent()?.navigate('Explorer')}
+              >
+                <Text style={styles.exploreBtnText}>Explorer les cours</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       ) : (
         <ScrollView
@@ -69,6 +115,7 @@ export default function FavoritesScreen() {
         >
           <Text style={styles.count}>
             {courses.length} cours favori{courses.length > 1 ? 's' : ''}
+            {hiddenCount > 0 ? ` · ${hiddenCount} hors rayon` : ''}
           </Text>
           {courses.map((course) => (
             <FavoriteCard
@@ -113,7 +160,7 @@ function FavoriteCard({
           {teacher && <TeacherBadge status={teacher.status} small />}
         </View>
         {teacher && (
-          <Text style={styles.cardTeacher}>avec {teacher.displayName}</Text>
+          <Text style={styles.cardTeacher}>avec {publicTeacherName(teacher)}</Text>
         )}
         <View style={styles.cardMeta}>
           {nextSession && (
@@ -137,15 +184,11 @@ function FavoriteCard({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 56,
+    paddingTop: 64,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
   },
-  back: { fontSize: 24, color: colors.text },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: colors.text },
+  headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.4 },
 
   empty: {
     flex: 1,

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,10 @@ import { colors, spacing } from '../theme/theme';
 
 const { width, height } = Dimensions.get('window');
 
+const TYPED_WORD = 'aussi simple';
+const TYPE_INTERVAL_MS = 90; // ~12 chars × 90ms ≈ 1.1s
+const CURSOR_BLINK_MS = 450;
+
 interface Props {
   onFinish: () => void;
 }
@@ -21,63 +25,69 @@ export default function SplashScreen({ onFinish }: Props) {
   const punchFade = useRef(new Animated.Value(0)).current;
   const punchY = useRef(new Animated.Value(20)).current;
   const punchScale = useRef(new Animated.Value(0.98)).current;
-  const highlightFade = useRef(new Animated.Value(0)).current;
+  const dotFade = useRef(new Animated.Value(0)).current;
+  const cursorOpacity = useRef(new Animated.Value(1)).current;
   const outFade = useRef(new Animated.Value(1)).current;
 
+  // Typewriter — how many chars of TYPED_WORD are currently revealed (0..12).
+  // While < TYPED_WORD.length the cursor is shown; once full we hide it and
+  // reveal the trailing dot.
+  const [typedChars, setTypedChars] = useState(0);
+
   useEffect(() => {
-    // Sequence: brand → punchline → highlight → hold → fade out
+    let typeInterval: ReturnType<typeof setInterval> | null = null;
+    let cursorLoop: Animated.CompositeAnimation | null = null;
+
+    // Stage 1: brand fades in + slides up, then the first line of the
+    // punchline (everything up to but excluding "aussi simple") appears.
     Animated.sequence([
-      // Brand appears
       Animated.parallel([
-        Animated.timing(brandFade, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        Animated.timing(brandY, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true,
-        }),
+        Animated.timing(brandFade, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(brandY,    { toValue: 0, duration: 600, useNativeDriver: true }),
       ]),
-      Animated.delay(200),
-      // Punchline appears
+      Animated.delay(180),
       Animated.parallel([
-        Animated.timing(punchFade, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(punchY, {
-          toValue: 0,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(punchScale, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
+        Animated.timing(punchFade,  { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(punchY,     { toValue: 0, duration: 700, useNativeDriver: true }),
+        Animated.timing(punchScale, { toValue: 1, duration: 700, useNativeDriver: true }),
       ]),
-      Animated.delay(400),
-      // Highlight on "pizza"
-      Animated.timing(highlightFade, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      // Hold
-      Animated.delay(1500),
-      // Fade out everything
-      Animated.timing(outFade, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
+      Animated.delay(120),
     ]).start(() => {
-      onFinish();
+      // Stage 2: start the blinking cursor and type "aussi simple" one char
+      // at a time. setInterval is the simplest fit since each step changes
+      // text content — Animated would only help if we faded each char.
+      cursorLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(cursorOpacity, { toValue: 0, duration: CURSOR_BLINK_MS, useNativeDriver: true }),
+          Animated.timing(cursorOpacity, { toValue: 1, duration: CURSOR_BLINK_MS, useNativeDriver: true }),
+        ]),
+      );
+      cursorLoop.start();
+
+      let i = 0;
+      typeInterval = setInterval(() => {
+        i += 1;
+        setTypedChars(i);
+        if (i >= TYPED_WORD.length) {
+          if (typeInterval) clearInterval(typeInterval);
+          if (cursorLoop) cursorLoop.stop();
+          // Stage 3: drop the dot, hold, fade out.
+          Animated.sequence([
+            Animated.timing(dotFade, { toValue: 1, duration: 250, useNativeDriver: true }),
+            Animated.delay(1200),
+            Animated.timing(outFade, { toValue: 0, duration: 500, useNativeDriver: true }),
+          ]).start(() => onFinish());
+        }
+      }, TYPE_INTERVAL_MS);
     });
+
+    return () => {
+      if (typeInterval) clearInterval(typeInterval);
+      if (cursorLoop) cursorLoop.stop();
+    };
   }, []);
+
+  const isTyping = typedChars < TYPED_WORD.length;
 
   return (
     <Animated.View style={[styles.container, { opacity: outFade }]}>
@@ -114,18 +124,18 @@ export default function SplashScreen({ onFinish }: Props) {
       >
         <Text style={styles.punchline}>
           Trouver une activité{'\n'}
-          <Animated.Text
-            style={[
-              styles.punchHighlight,
-              { opacity: highlightFade.interpolate({ inputRange: [0, 1], outputRange: [1, 1] }) },
-            ]}
-          >
-            n'a jamais été{' '}
-            <Animated.Text style={[styles.pizzaWord, { opacity: highlightFade }]}>
-              aussi simple
+          n'a jamais été{' '}
+          <Text style={styles.pizzaWord}>
+            {TYPED_WORD.slice(0, typedChars)}
+          </Text>
+          {isTyping && (
+            <Animated.Text style={[styles.cursor, { opacity: cursorOpacity }]}>
+              |
             </Animated.Text>
+          )}
+          <Animated.Text style={[styles.punchDot, { opacity: dotFade }]}>
+            .
           </Animated.Text>
-          <Text style={styles.punchDot}>.</Text>
         </Text>
       </Animated.View>
 
@@ -201,13 +211,15 @@ const styles = StyleSheet.create({
     lineHeight: 42,
     letterSpacing: -0.5,
   },
-  punchHighlight: {
-    fontWeight: '700',
-  },
   pizzaWord: {
     color: colors.primary,
     fontStyle: 'italic',
     fontWeight: '700',
+  },
+  cursor: {
+    color: colors.primary,
+    fontWeight: '500',
+    fontSize: 30,
   },
   punchDot: {
     color: colors.primary,

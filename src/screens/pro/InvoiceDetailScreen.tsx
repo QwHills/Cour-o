@@ -146,14 +146,8 @@ export default function InvoiceDetailScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.bottom}>
-        <Button
-          label="Télécharger PDF"
-          icon="📄"
-          variant="secondary"
-          onPress={() => Alert.alert('Bientôt disponible', 'Le téléchargement PDF sera disponible dans la version finale.')}
-        />
-      </View>
+      {/* "Télécharger PDF" temporarily hidden — generation lands with the
+          billing milestone. Re-enable once `invoiceService.generatePdf` ships. */}
     </View>
   );
 }

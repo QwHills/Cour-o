@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -113,8 +114,14 @@ export default function ProPlanningScreen() {
     }
   }
 
-  // Tab: Semaine / Tout
-  const [tab, setTab] = useState<'week' | 'all'>('week');
+  // Tab: Aujourd'hui / Semaine. "today" shows only sessions starting before
+  // the next midnight; "week" keeps the broader 7-day view.
+  const [tab, setTab] = useState<'today' | 'week'>('today');
+
+  // Pull-to-refresh on the scroll view forces a fresh fetch of bookings +
+  // manual participants. Useful after a student books from the web while
+  // the prof has the planning open.
+  const [refreshing, setRefreshing] = useState(false);
 
   // Promo modal — per-session promotion editing
   const [promoModal, setPromoModal] = useState<{ session: ClassSession; cls: ClassOffer } | null>(null);
@@ -149,13 +156,15 @@ export default function ProPlanningScreen() {
     setPromoModal(null);
   };
 
-  // Filter to current week if needed
+  // Filter according to the active tab.
   const now = new Date();
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
   const weekEnd = new Date(now);
   weekEnd.setDate(weekEnd.getDate() + 7);
-  const displayed = tab === 'week'
-    ? grouped.filter((g) => g.date <= weekEnd)
-    : grouped;
+  const displayed = tab === 'today'
+    ? grouped.filter((g) => g.date <= endOfToday)
+    : grouped.filter((g) => g.date <= weekEnd);
 
   const totalSessions = proSessions.length;
   const totalBooked = proSessions.reduce((sum, s) => sum + countForSession(s.id), 0);
@@ -173,19 +182,19 @@ export default function ProPlanningScreen() {
       {/* Tabs */}
       <View style={styles.tabs}>
         <TouchableOpacity
+          style={[styles.tab, tab === 'today' && styles.tabActive]}
+          onPress={() => setTab('today')}
+        >
+          <Text style={[styles.tabText, tab === 'today' && styles.tabTextActive]}>
+            Aujourd'hui
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.tab, tab === 'week' && styles.tabActive]}
           onPress={() => setTab('week')}
         >
           <Text style={[styles.tabText, tab === 'week' && styles.tabTextActive]}>
             Cette semaine
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'all' && styles.tabActive]}
-          onPress={() => setTab('all')}
-        >
-          <Text style={[styles.tabText, tab === 'all' && styles.tabTextActive]}>
-            Tout
           </Text>
         </TouchableOpacity>
       </View>
@@ -212,6 +221,25 @@ export default function ProPlanningScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              try {
+                await Promise.all([
+                  bookingsService.load(),
+                  teacherId
+                    ? manualParticipantsService.loadForTeacher(teacherId)
+                    : Promise.resolve(),
+                ]);
+              } finally {
+                setRefreshing(false);
+              }
+            }}
+            tintColor={colors.proAccent}
+          />
+        }
       >
         {displayed.length === 0 ? (
           <View style={styles.empty}>
@@ -329,6 +357,25 @@ export default function ProPlanningScreen() {
             </View>
           ))
         )}
+
+        {/* Quick-add session — opens the QuickAddSession screen where the
+            prof picks an existing class + date + time + capacity. Full
+            class creation (title, photos, weekly pattern) stays on web. */}
+        <TouchableOpacity
+          style={styles.addSessionCard}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('QuickAddSession' as never)}
+        >
+          <View style={styles.addSessionIcon}>
+            <Text style={styles.addSessionIconText}>+</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.addSessionTitle}>Ajouter une session</Text>
+            <Text style={styles.addSessionDesc}>
+              Créez rapidement une nouvelle session à votre planning.
+            </Text>
+          </View>
+        </TouchableOpacity>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -604,6 +651,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.error,
+  },
+  addSessionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: 'rgba(139,126,200,0.10)',
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  addSessionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addSessionIconText: {
+    fontSize: 26,
+    fontWeight: '300',
+    color: colors.proAccent,
+    marginTop: -3,
+  },
+  addSessionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  addSessionDesc: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 17,
   },
   modalBackdrop: {
     flex: 1,

@@ -16,6 +16,7 @@ import { coursesService } from '../../services/courses.service';
 import { paymentsService } from '../../services/payments.service';
 import { authService } from '../../services/auth.service';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
+import { publicTeacherName } from '../../utils/teacherName';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -80,7 +81,7 @@ export default function BookingDetailScreen() {
         <View style={styles.content}>
           <Badge label={course.class.category} variant="primary" />
           <Text style={styles.title}>{course.class.title}</Text>
-          <Text style={styles.proName}>avec {course.teacher.displayName}</Text>
+          <Text style={styles.proName}>avec {publicTeacherName(course.teacher)}</Text>
 
           <Card style={styles.block}>
             <InfoRow icon="calendar-outline" label="Date" value={formatFullDate(booking.sessionStartsAt)} />
@@ -107,7 +108,7 @@ export default function BookingDetailScreen() {
               />
               <View style={{ flex: 1 }}>
                 <Text style={styles.contactTitle}>
-                  Une question pour {course.teacher.displayName} ?
+                  Une question pour {publicTeacherName(course.teacher)} ?
                 </Text>
                 <Text style={styles.contactHint}>
                   Envoie-lui un message via Koureo

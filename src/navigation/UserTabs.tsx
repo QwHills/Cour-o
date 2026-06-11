@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
+import HomeScreen from '../screens/user/HomeScreen';
 import MapScreen from '../screens/user/MapScreen';
 import CourseDetailScreen from '../screens/user/CourseDetailScreen';
 import SlotPickerScreen from '../screens/user/SlotPickerScreen';
@@ -23,6 +24,7 @@ import PaymentMethodsScreen from '../screens/user/PaymentMethodsScreen';
 import MyInvoicesScreen from '../screens/user/MyInvoicesScreen';
 import HelpCenterScreen from '../screens/user/HelpCenterScreen';
 import ContactScreen from '../screens/user/ContactScreen';
+import DiscoveryRadiusScreen from '../screens/user/DiscoveryRadiusScreen';
 import CGUScreen from '../screens/shared/CGUScreen';
 import ProOnboarding1Screen from '../screens/auth/ProOnboarding1Screen';
 import ProOnboarding2Screen from '../screens/auth/ProOnboarding2Screen';
@@ -42,28 +44,21 @@ const Stack = createNativeStackNavigator();
 function TabIcon({
   name,
   focused,
-  label,
 }: {
   name: keyof typeof Ionicons.glyphMap;
   focused: boolean;
-  label: string;
+  // label kept in the public signature so callers don't have to be edited; the
+  // icon-only design no longer renders it.
+  label?: string;
 }) {
   return (
     <View style={tabStyles.container}>
       {focused && <View style={tabStyles.indicator} />}
       <Ionicons
         name={name}
-        size={22}
+        size={28}
         color={focused ? colors.primary : colors.textLight}
       />
-      <Text
-        style={[
-          tabStyles.label,
-          { color: focused ? colors.primary : colors.textLight, fontWeight: focused ? '700' : '500' },
-        ]}
-      >
-        {label}
-      </Text>
     </View>
   );
 }
@@ -72,24 +67,26 @@ const tabStyles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 72,
-    height: 48,
+    height: 40,
     position: 'relative',
   },
   indicator: {
     position: 'absolute',
-    top: -8,
+    top: -10,
     width: 28,
     height: 3,
     borderRadius: 2,
     backgroundColor: colors.primary,
   },
-  label: {
-    fontSize: 10,
-    letterSpacing: 0.3,
-    marginTop: 4,
-  },
 });
+
+function HomeStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="HomeFeed" component={HomeScreen} />
+    </Stack.Navigator>
+  );
+}
 
 function ExploreStack() {
   return (
@@ -103,6 +100,14 @@ function ExploreStack() {
       <Stack.Screen name="TeacherReviews" component={TeacherReviewsScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="ProductCheckout" component={ProductCheckoutScreen} options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="Search" component={SearchScreen} options={{ animation: 'slide_from_bottom' }} />
+    </Stack.Navigator>
+  );
+}
+
+function FavoritesStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="FavoritesHome" component={FavoritesScreen} />
     </Stack.Navigator>
   );
 }
@@ -122,13 +127,13 @@ function ProfileStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="ProfileHome" component={UserProfileScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="UserMessages" component={UserMessagesScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="MyInvoices" component={MyInvoicesScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="HelpCenter" component={HelpCenterScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="Contact" component={ContactScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="DiscoveryRadius" component={DiscoveryRadiusScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="CGU" component={CGUScreen} options={{ animation: 'slide_from_bottom' }} />
       {/* "Become a teacher" flow — shared with AuthNavigator screens but
           entered here with `isUpgrade: true` so no new account is created. */}
@@ -154,9 +159,9 @@ export default function UserTabs() {
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopWidth: 0,
-          height: 88,
-          paddingTop: 12,
-          paddingBottom: 30,
+          height: 78,
+          paddingTop: 14,
+          paddingBottom: 28,
           shadowColor: '#1A1714',
           shadowOffset: { width: 0, height: -6 },
           shadowOpacity: 0.06,
@@ -165,6 +170,15 @@ export default function UserTabs() {
         },
       }}
     >
+      <Tab.Screen
+        name="Accueil"
+        component={HomeStack}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'home' : 'home-outline'} focused={focused} label="Accueil" />
+          ),
+        }}
+      />
       <Tab.Screen
         name="Explorer"
         component={ExploreStack}
@@ -175,11 +189,20 @@ export default function UserTabs() {
         }}
       />
       <Tab.Screen
-        name="Mes cours"
+        name="Réservations"
         component={BookingsStack}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'calendar' : 'calendar-outline'} focused={focused} label="Mes cours" />
+            <TabIcon name={focused ? 'calendar' : 'calendar-outline'} focused={focused} label="Réservations" />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Favoris"
+        component={FavoritesStack}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'heart' : 'heart-outline'} focused={focused} label="Favoris" />
           ),
         }}
       />

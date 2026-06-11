@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, spacing } from '../../theme/theme';
 import Input from '../../components/ui/Input';
+import PasswordInput from '../../components/ui/PasswordInput';
 import Button from '../../components/ui/Button';
 
 export default function ProSignUpScreen() {
@@ -19,19 +20,58 @@ export default function ProSignUpScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [acceptCGU, setAcceptCGU] = useState(false);
 
+  // Loose email regex — catches obvious typos without rejecting valid edge
+  // cases (sub-domains, '+' aliases, etc.). Supabase will run a stricter
+  // RFC-grade check server-side anyway.
+  const emailLooksValid = (e: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+
   const handleNext = () => {
-    if (!name || !email || !password) {
-      Alert.alert('', 'Remplis tous les champs pour continuer.');
+    const cleanName = name.trim();
+    const cleanEmail = email.trim();
+    if (!cleanName || !cleanEmail || !password) {
+      Alert.alert('Champs manquants', 'Remplis tous les champs pour continuer.');
+      return;
+    }
+    if (cleanName.length < 2) {
+      Alert.alert('Prénom trop court', 'Entre au moins 2 caractères.');
+      return;
+    }
+    if (!emailLooksValid(cleanEmail)) {
+      Alert.alert('Email invalide', 'Vérifie le format de ton adresse email.');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert(
+        'Mot de passe trop court',
+        'Choisis un mot de passe d\'au moins 6 caractères pour protéger ton compte.',
+      );
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert(
+        'Les mots de passe ne correspondent pas',
+        'Vérifie que tu as saisi le même mot de passe dans les deux champs.',
+      );
       return;
     }
     if (!acceptCGU) {
-      Alert.alert('', "Tu dois accepter les conditions d'utilisation.");
+      Alert.alert(
+        'CGU non acceptées',
+        "Tu dois accepter les conditions d'utilisation pour continuer.",
+      );
       return;
     }
-    // Don't create user yet — pass data forward, create at final step
-    navigation.navigate('ProOnboarding1', { name, email, password });
+    // Account creation is deferred to step 4 so the user can back out without
+    // leaving an orphan auth row behind.
+    navigation.navigate('ProOnboarding1', {
+      name: cleanName,
+      email: cleanEmail,
+      password,
+    });
   };
 
   return (
@@ -70,12 +110,22 @@ export default function ProSignUpScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
           />
-          <Input
+          <PasswordInput
             label="Mot de passe"
             placeholder="6 caractères minimum"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+          />
+          <PasswordInput
+            label="Confirme ton mot de passe"
+            placeholder="Re-tape le même mot de passe"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            error={
+              confirmPassword.length > 0 && confirmPassword !== password
+                ? 'Les mots de passe ne correspondent pas'
+                : undefined
+            }
           />
         </View>
 

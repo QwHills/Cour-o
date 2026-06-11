@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import Input from '../../components/ui/Input';
+import PasswordInput from '../../components/ui/PasswordInput';
 import Button from '../../components/ui/Button';
 import { authService } from '../../services/auth.service';
 import { organizationsService } from '../../services/organizations.service';
@@ -40,6 +41,7 @@ export default function OrgSignUpScreen() {
   const [adminName, setAdminName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [acceptCGU, setAcceptCGU] = useState(false);
 
   const [orgName, setOrgName] = useState('');
@@ -50,17 +52,43 @@ export default function OrgSignUpScreen() {
 
   const [loading, setLoading] = useState(false);
 
+  const emailLooksValid = (e: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+
   const handleCreate = async () => {
-    if (!adminName || !adminEmail || !adminPassword) {
+    const cleanName = adminName.trim();
+    const cleanEmail = adminEmail.trim();
+    if (!cleanName || !cleanEmail || !adminPassword) {
       Alert.alert('Compte admin incomplet', 'Remplis ton prénom, email et mot de passe.');
       return;
     }
-    if (!orgName || !orgKind) {
+    if (!emailLooksValid(cleanEmail)) {
+      Alert.alert('Email invalide', 'Vérifie le format de ton adresse email.');
+      return;
+    }
+    if (adminPassword.length < 6) {
+      Alert.alert(
+        'Mot de passe trop court',
+        "Choisis un mot de passe d'au moins 6 caractères.",
+      );
+      return;
+    }
+    if (adminPassword !== confirmPassword) {
+      Alert.alert(
+        'Les mots de passe ne correspondent pas',
+        'Vérifie que tu as saisi le même mot de passe dans les deux champs.',
+      );
+      return;
+    }
+    if (!orgName.trim() || !orgKind) {
       Alert.alert('Structure incomplète', 'Indique au moins le nom et le type de ta structure.');
       return;
     }
     if (!acceptCGU) {
-      Alert.alert('', "Tu dois accepter les conditions d'utilisation.");
+      Alert.alert(
+        'CGU non acceptées',
+        "Tu dois accepter les conditions d'utilisation pour continuer.",
+      );
       return;
     }
 
@@ -132,12 +160,22 @@ export default function OrgSignUpScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        <Input
+        <PasswordInput
           label="Mot de passe"
           placeholder="6 caractères minimum"
           value={adminPassword}
           onChangeText={setAdminPassword}
-          secureTextEntry
+        />
+        <PasswordInput
+          label="Confirme ton mot de passe"
+          placeholder="Re-tape le même mot de passe"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          error={
+            confirmPassword.length > 0 && confirmPassword !== adminPassword
+              ? 'Les mots de passe ne correspondent pas'
+              : undefined
+          }
         />
 
         <Text style={styles.sectionTitle}>2. Ta structure</Text>

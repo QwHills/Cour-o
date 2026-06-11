@@ -61,7 +61,7 @@ export default function MyInvoicesScreen() {
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() =>
-                navigation.getParent()?.navigate('Mes cours', {
+                navigation.getParent()?.navigate('Réservations', {
                   screen: 'BookingDetail',
                   initial: false,
                   params: { bookingId: item.bookingId },

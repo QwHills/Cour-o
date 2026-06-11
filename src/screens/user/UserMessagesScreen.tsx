@@ -23,6 +23,7 @@ import {
 } from '../../services/messaging.service';
 import { teachersService } from '../../services/teachers.service';
 import { coursesService } from '../../services/courses.service';
+import { publicTeacherName } from '../../utils/teacherName';
 import { offerSuggestionsService, OfferSuggestionRow } from '../../services/offerSuggestions.service';
 import { formatTimeLabel, formatDateLabel } from '../../utils/date';
 
@@ -203,7 +204,7 @@ function ConversationRow({
         <View style={styles.convTop}>
           <View style={styles.nameRow}>
             <Text style={[styles.convName, unread && styles.convNameUnread]}>
-              {conv.teacher?.displayName ?? 'Professeur'}
+              {conv.teacher ? publicTeacherName(conv.teacher) : 'Professeur'}
             </Text>
             {conv.teacher?.status && (
               <TeacherBadge status={conv.teacher.status} small />
@@ -289,7 +290,7 @@ function ConversationView({
           <View>
             <View style={styles.nameRow}>
               <Text style={styles.convHeaderName}>
-                {conv.teacher?.displayName ?? 'Professeur'}
+                {conv.teacher ? publicTeacherName(conv.teacher) : 'Professeur'}
               </Text>
               {conv.teacher?.status && (
                 <TeacherBadge status={conv.teacher.status} small />
@@ -350,7 +351,7 @@ function ConversationView({
                     }
                   >
                     <Text style={styles.suggestionCtaText}>
-                      ✨ Découvrir les offres de {conv.teacher.displayName.split(' ')[0]}
+                      ✨ Découvrir les offres de {publicTeacherName(conv.teacher)}
                     </Text>
                     <Text style={styles.suggestionCtaChevron}>›</Text>
                   </TouchableOpacity>

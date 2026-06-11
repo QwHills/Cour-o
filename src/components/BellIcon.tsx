@@ -8,10 +8,16 @@ import { colors, shadows } from '../theme/theme';
 
 interface Props {
   onDark?: boolean;
-  target?: string; // navigation screen name, default 'Notifications'
+  /** Sub-screen name in the target tab's stack. Default 'Notifications'. */
+  target?: string;
+  /** Parent tab that owns the target stack — 'Profil' on the user side
+   *  (default) and 'Paramètres' on the pro side, since that's where each
+   *  registers its NotificationsScreen. Pass explicitly when the surrounding
+   *  navigator changes (e.g. embedding BellIcon on a pro screen). */
+  parentTab?: string;
 }
 
-export default function BellIcon({ onDark = false, target = 'Notifications' }: Props) {
+export default function BellIcon({ onDark = false, target = 'Notifications', parentTab = 'Profil' }: Props) {
   const navigation = useNavigation<any>();
   const user = authService.getCurrentUser();
   const [unread, setUnread] = useState(
@@ -29,10 +35,9 @@ export default function BellIcon({ onDark = false, target = 'Notifications' }: P
       style={[styles.btn, onDark ? styles.btnDark : styles.btnLight]}
       activeOpacity={0.8}
       onPress={() => {
-        // Try to navigate from parent or current navigator
         const parent = navigation.getParent();
         if (parent) {
-          parent.navigate('Profil', { screen: target });
+          parent.navigate(parentTab, { screen: target, initial: false });
         } else {
           navigation.navigate(target);
         }

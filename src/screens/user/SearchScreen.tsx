@@ -8,7 +8,7 @@ import {
   TextInput,
   Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { coursesService, EnrichedCourse } from '../../services/courses.service';
 import { ClassFormat, Level } from '../../types/domain';
@@ -16,6 +16,7 @@ import { colors, spacing, radii, shadows } from '../../theme/theme';
 import { getCategoryColor } from '../../utils/categoryIcons';
 import TeacherBadge from '../../components/TeacherBadge';
 import { formatDateLabel, formatTimeLabel } from '../../utils/date';
+import { publicTeacherName } from '../../utils/teacherName';
 
 const CATEGORIES = [
   'Yoga', 'Danse', 'Musique', 'Sport', 'Bien-être', 'Langues',
@@ -46,9 +47,13 @@ const DISTANCE_STEPS: Array<{ meters: number | null; label: string }> = [
 
 export default function SearchScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  // Optional initial category — set by HomeScreen when the user taps a
+  // shortcut. Only used as a seed; the user can clear it from the chip row.
+  const route = useRoute<any>();
+  const initialCategory: string | undefined = route.params?.category;
 
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(initialCategory ?? null);
   const [format, setFormat] = useState<ClassFormat | null>(null);
   const [level, setLevel] = useState<Level | null>(null);
   const [maxPriceIdx, setMaxPriceIdx] = useState<number | null>(null);
@@ -342,7 +347,7 @@ function ResultCard({ course, onPress }: { course: EnrichedCourse; onPress: () =
           {teacher && <TeacherBadge status={teacher.status} small />}
         </View>
         {teacher && (
-          <Text style={styles.resultTeacher}>avec {teacher.displayName}</Text>
+          <Text style={styles.resultTeacher}>avec {publicTeacherName(teacher)}</Text>
         )}
         <View style={styles.resultMeta}>
           {nextSession && (

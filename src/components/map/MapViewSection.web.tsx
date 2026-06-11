@@ -65,6 +65,68 @@ export default function MapViewSection(props: MapViewSectionProps) {
   }
 }
 
+// Lazy single-shot module loads — destructuring these at the module top level
+// keeps the helper components below at a STABLE function identity across
+// re-renders. Defining FocusPanner/RegionReporter inside LeafletMap (as we
+// used to) created a fresh function reference every render, which made React
+// remount them on every map pan → their useEffect re-fired → flyTo snapped
+// the user back to focusLocation, blocking navigation.
+// @ts-ignore
+const RL = require('react-leaflet');
+// @ts-ignore
+const L = require('leaflet');
+const { MapContainer, TileLayer, Marker, useMapEvents, useMap } = RL as {
+  MapContainer: any;
+  TileLayer: any;
+  Marker: any;
+  useMapEvents: any;
+  useMap: any;
+};
+
+// Recenter the camera whenever the parent asks us to focus a new location.
+// `focusKey` is also in the deps so a re-tap of "locate me" with identical
+// coordinates still triggers a fly-to.
+function FocusPanner({
+  focusLocation,
+  focusKey,
+}: {
+  focusLocation?: { latitude: number; longitude: number } | null;
+  focusKey?: number;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (!focusLocation) return;
+    map.flyTo([focusLocation.latitude, focusLocation.longitude], map.getZoom(), {
+      duration: 0.6,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusLocation?.latitude, focusLocation?.longitude, focusKey]);
+  return null;
+}
+
+// Reports the viewport whenever the user finishes panning/zooming.
+function RegionReporter({
+  onRegionChange,
+}: {
+  onRegionChange?: MapViewSectionProps['onRegionChange'];
+}) {
+  useMapEvents({
+    moveend: (e: any) => {
+      if (!onRegionChange) return;
+      const map = e.target;
+      const center = map.getCenter();
+      const bounds = map.getBounds();
+      onRegionChange({
+        latitude: center.lat,
+        longitude: center.lng,
+        latitudeDelta: bounds.getNorth() - bounds.getSouth(),
+        longitudeDelta: bounds.getEast() - bounds.getWest(),
+      });
+    },
+  });
+  return null;
+}
+
 function LeafletMap({
   initialRegion,
   markers,
@@ -72,14 +134,9 @@ function LeafletMap({
   onMarkerPress,
   onRegionChange,
   focusLocation,
+  focusKey,
+  userLocation,
 }: MapViewSectionProps) {
-  // Dynamic requires so SSR/initial-parse doesn't break if the lib isn't ready
-  // @ts-ignore
-  const RL = require('react-leaflet');
-  // @ts-ignore
-  const L = require('leaflet');
-
-  const { MapContainer, TileLayer, Marker, useMapEvents, useMap } = RL;
 
   // Fix default icon URLs (bundlers strip them)
   delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -105,41 +162,18 @@ function LeafletMap({
     return L.divIcon({ html, className: 'koureo-marker', iconSize: [0, 0], iconAnchor: [30, 24] });
   }
 
-  // Recenter the camera whenever the parent asks us to focus a new location.
-  // The parent guards against the feedback loop with the viewport-aware
-  // carousel by setting an "is swiping cards" flag that suppresses region
-  // updates while this fly-to animation is running.
-  function FocusPanner() {
-    const map = useMap();
-    useEffect(() => {
-      if (!focusLocation) return;
-      map.flyTo([focusLocation.latitude, focusLocation.longitude], map.getZoom(), {
-        duration: 0.6,
-      });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [focusLocation?.latitude, focusLocation?.longitude]);
-    return null;
-  }
-
-  // Reports the current viewport to the parent whenever the user finishes
-  // panning or zooming. Converted from Leaflet's LatLngBounds into the
-  // {lat, lng, latitudeDelta, longitudeDelta} shape that react-native-maps uses.
-  function RegionReporter() {
-    useMapEvents({
-      moveend: (e: any) => {
-        if (!onRegionChange) return;
-        const map = e.target;
-        const center = map.getCenter();
-        const bounds = map.getBounds();
-        onRegionChange({
-          latitude: center.lat,
-          longitude: center.lng,
-          latitudeDelta: bounds.getNorth() - bounds.getSouth(),
-          longitudeDelta: bounds.getEast() - bounds.getWest(),
-        });
-      },
-    });
-    return null;
+  // Apple-style "blue dot" for the user position — soft halo, white ring,
+  // solid blue centre. Drawn as a custom divIcon so it matches the iOS look.
+  function buildUserDot() {
+    const html = `
+      <div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;">
+        <div style="position:absolute;width:30px;height:30px;border-radius:50%;background:rgba(10,132,255,0.18);"></div>
+        <div style="position:absolute;width:20px;height:20px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 4px rgba(0,0,0,0.18);display:flex;align-items:center;justify-content:center;">
+          <div style="width:14px;height:14px;border-radius:50%;background:#0A84FF;"></div>
+        </div>
+      </div>
+    `;
+    return L.divIcon({ html, className: 'koureo-user-dot', iconSize: [30, 30], iconAnchor: [15, 15] });
   }
 
   return (
@@ -157,8 +191,8 @@ function LeafletMap({
           maxZoom={19}
           detectRetina
         />
-        <RegionReporter />
-        <FocusPanner />
+        <RegionReporter onRegionChange={onRegionChange} />
+        <FocusPanner focusLocation={focusLocation} focusKey={focusKey} />
         {markers.map((m) => (
           <Marker
             key={m.id}
@@ -170,6 +204,13 @@ function LeafletMap({
           // bottom carousel to the matching card, not surface a leaflet
           // popup over the map.
         ))}
+        {userLocation && (
+          <Marker
+            position={[userLocation.latitude, userLocation.longitude]}
+            icon={buildUserDot()}
+            interactive={false}
+          />
+        )}
       </MapContainer>
     </div>
   );

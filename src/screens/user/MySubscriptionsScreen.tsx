@@ -25,6 +25,7 @@ import {
   StudentPurchase,
 } from '../../types/domain';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
+import { publicTeacherName } from '../../utils/teacherName';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 
@@ -100,7 +101,7 @@ export default function MySubscriptionsScreen() {
 
 function resolveOwnerName(ownerType: OwnerType, ownerId: string): string {
   if (ownerType === 'teacher') {
-    return teachersService.getCached(ownerId)?.displayName ?? 'Professeur';
+    return publicTeacherName(teachersService.getCached(ownerId)) || 'Professeur';
   }
   return organizationsService.getById(ownerId)?.name ?? 'Structure';
 }

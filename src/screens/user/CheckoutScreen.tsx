@@ -23,10 +23,23 @@ import {
 } from '../../services/commission.service';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import { formatFullDate, formatTimeLabel, formatDuration } from '../../utils/date';
+import { publicTeacherName } from '../../utils/teacherName';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 import CancellationNotice from '../../components/CancellationNotice';
+
+// Race a promise against a deadline so a hung network call surfaces a clear
+// error instead of leaving the user staring at an infinite spinner.
+function withTimeout<T>(p: Promise<T>, ms: number, msg: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(msg)), ms);
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
 
 export default function CheckoutScreen() {
   const route = useRoute<any>();
@@ -124,12 +137,19 @@ export default function CheckoutScreen() {
       }
 
       // Paid course → Stripe PaymentSheet flow with the total (unitPrice × count)
-      const sheet = await paymentsService.createPaymentSheet({
-        amount: totalPrice,
-        currency: 'eur',
-        bookingReference: `session_multi_${sessions.map((s) => s.id).join('_')}`,
-      });
+      console.log('[checkout] step 1: createPaymentSheet …');
+      const sheet = await withTimeout(
+        paymentsService.createPaymentSheet({
+          amount: totalPrice,
+          currency: 'eur',
+          bookingReference: `session_multi_${sessions.map((s) => s.id).join('_')}`,
+        }),
+        15000,
+        'Le serveur de paiement ne répond pas (timeout 15s).',
+      );
+      console.log('[checkout] step 1 OK — clientSecret length', sheet.paymentIntentClientSecret?.length);
 
+      console.log('[checkout] step 2: initPaymentSheet …');
       const { error: initError } = await initPaymentSheet({
         merchantDisplayName: 'Koureo',
         paymentIntentClientSecret: sheet.paymentIntentClientSecret,
@@ -141,12 +161,18 @@ export default function CheckoutScreen() {
         },
         allowsDelayedPaymentMethods: false,
       });
-      if (initError) throw new Error(initError.message);
+      if (initError) {
+        console.error('[checkout] initPaymentSheet error', initError);
+        throw new Error(`init: ${initError.code ?? ''} ${initError.message}`);
+      }
+      console.log('[checkout] step 2 OK');
 
+      console.log('[checkout] step 3: presentPaymentSheet …');
       const { error: sheetError } = await presentPaymentSheet();
+      console.log('[checkout] step 3 returned', sheetError);
       if (sheetError) {
         if (sheetError.code !== 'Canceled') {
-          throw new Error(sheetError.message);
+          throw new Error(`sheet: ${sheetError.code ?? ''} ${sheetError.message}`);
         }
         return;
       }
@@ -190,7 +216,7 @@ export default function CheckoutScreen() {
             <View style={styles.recapInfo}>
               <Badge label={cls.category} variant="primary" small />
               <Text style={styles.classTitle}>{cls.title}</Text>
-              <Text style={styles.proName}>avec {pro.displayName}</Text>
+              <Text style={styles.proName}>avec {publicTeacherName(pro)}</Text>
             </View>
           </View>
           <View style={styles.divider} />
@@ -288,7 +314,7 @@ export default function CheckoutScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.cardLabel}>
-                      Mes crédits chez {pro.displayName}
+                      Mes crédits chez {publicTeacherName(pro)}
                     </Text>
                     <Text
                       style={[

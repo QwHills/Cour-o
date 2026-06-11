@@ -17,6 +17,7 @@ import { pointsService } from '../../services/points.service';
 import { bookingsService } from '../../services/bookings.service';
 import { favoritesService } from '../../services/favorites.service';
 import { notificationsService } from '../../services/notifications.service';
+import { messagingService } from '../../services/messaging.service';
 import { teachersService } from '../../services/teachers.service';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import Card from '../../components/ui/Card';
@@ -30,6 +31,18 @@ export default function UserProfileScreen() {
     user ? notificationsService.countUnread(user.id) : 0
   );
   const [pointsTotal, setPointsTotal] = useState<number>(0);
+  // Unread count from the messaging service — re-derived whenever the
+  // conversation cache changes (sendMessage, markRead, etc.).
+  const [unreadMsgs, setUnreadMsgs] = useState<number>(
+    user ? messagingService.listForUser(user.id).filter((c) => c.unreadUser).length : 0,
+  );
+  useEffect(() => {
+    if (!user) return;
+    setUnreadMsgs(messagingService.listForUser(user.id).filter((c) => c.unreadUser).length);
+    return messagingService.onChange(() => {
+      setUnreadMsgs(messagingService.listForUser(user.id).filter((c) => c.unreadUser).length);
+    });
+  }, [user?.id]);
 
   // Detect if the current user actually has a teacher_profile (= they're a pro
   // who switched to user mode). If so we show a "Retour à mon espace pro"
@@ -154,14 +167,14 @@ export default function UserProfileScreen() {
       <View style={styles.statsRow}>
         <TouchableOpacity
           style={styles.statCard}
-          onPress={() => navigation.navigate('Mes cours')}
+          onPress={() => navigation.getParent()?.navigate('Réservations')}
         >
           <Text style={styles.statValue}>{bookings.length}</Text>
           <Text style={styles.statLabel}>Réservations ›</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.statCard}
-          onPress={() => navigation.navigate('Favorites')}
+          onPress={() => navigation.getParent()?.navigate('Favoris')}
         >
           <Text style={styles.statValue}>{favCount}</Text>
           <Text style={styles.statLabel}>Favoris ›</Text>
@@ -210,12 +223,12 @@ export default function UserProfileScreen() {
             icon="♥"
             label="Mes favoris"
             sub={favCount > 0 ? `${favCount} cours sauvegardé${favCount > 1 ? 's' : ''}` : 'Aucun favori'}
-            onPress={() => navigation.navigate('Favorites')}
+            onPress={() => navigation.getParent()?.navigate('Favoris')}
           />
           <MenuItem
             icon="○"
             label="Messages"
-            sub="1 non lu"
+            sub={unreadMsgs > 0 ? `${unreadMsgs} non lu${unreadMsgs > 1 ? 's' : ''}` : 'Tout est lu'}
             onPress={() => navigation.navigate('UserMessages')}
           />
           <MenuItem
@@ -240,6 +253,12 @@ export default function UserProfileScreen() {
             icon="◆"
             label="Mes factures"
             onPress={() => navigation.navigate('MyInvoices')}
+          />
+          <MenuItem
+            icon="◎"
+            label="Rayon de recherche"
+            sub="Activités, promotions, favoris"
+            onPress={() => navigation.navigate('DiscoveryRadius')}
             isLast
           />
         </Card>

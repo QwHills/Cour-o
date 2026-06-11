@@ -14,6 +14,7 @@ import {
 import { colors, spacing, radii, shadows } from '../theme/theme';
 import { EnrichedCourse } from '../services/courses.service';
 import { formatTimeLabel, formatDateLabel } from '../utils/date';
+import { publicTeacherName } from '../utils/teacherName';
 import { getCategoryColor } from '../utils/categoryIcons';
 import { isPromoLive } from '../types/domain';
 import FavoriteButton from './FavoriteButton';
@@ -43,6 +44,8 @@ export default function CompactCourseCard({ course, onPress }: Props) {
     >
       <View style={styles.imageWrap}>
         <Image source={{ uri: cls.imageUrl }} style={styles.image} />
+        {/* Promo wins the prime top-left slot; distance is pushed to the
+            bottom-left in that case so both still fit on the image. */}
         {promo && (
           <View style={styles.promoBadge}>
             <Text style={styles.promoBadgeText}>
@@ -50,6 +53,11 @@ export default function CompactCourseCard({ course, onPress }: Props) {
             </Text>
           </View>
         )}
+        {distanceLabel ? (
+          <View style={[styles.distancePill, promo && styles.distancePillBottom]}>
+            <Text style={styles.distancePillText}>{distanceLabel}</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.body}>
@@ -68,7 +76,7 @@ export default function CompactCourseCard({ course, onPress }: Props) {
 
         {teacher && (
           <Text style={styles.teacher} numberOfLines={1}>
-            {teacher.displayName}
+            {publicTeacherName(teacher)}
             {isNew && <Text style={styles.newTag}> · Nouveau</Text>}
           </Text>
         )}
@@ -125,6 +133,32 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#fff',
     letterSpacing: 0.3,
+  },
+  distancePill: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    shadowColor: '#1A1714',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  // When the promo badge already occupies the top-left, drop the distance
+  // pill to the bottom-left of the image instead of overlapping.
+  distancePillBottom: {
+    top: undefined,
+    bottom: 6,
+  },
+  distancePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: 0.2,
   },
   body: {
     flex: 1,

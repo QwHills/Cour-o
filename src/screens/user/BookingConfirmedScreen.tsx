@@ -18,6 +18,7 @@ import { colors, spacing, radii } from '../../theme/theme';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import { formatFullDate, formatTimeLabel } from '../../utils/date';
+import { publicTeacherName } from '../../utils/teacherName';
 import { Booking } from '../../types/domain';
 
 // Google Calendar "add event" URL. Works on iOS, Android and web — opens the
@@ -66,7 +67,7 @@ export default function BookingConfirmedScreen() {
   const handleAddToCalendar = (booking: Booking) => {
     if (!course.teacher) return;
     const url = buildGoogleCalendarUrl({
-      title: `${course.class.title} avec ${course.teacher.displayName}`,
+      title: `${course.class.title} avec ${publicTeacherName(course.teacher)}`,
       startsAt: booking.sessionStartsAt,
       endsAt: new Date(
         new Date(booking.sessionStartsAt).getTime() +
@@ -105,7 +106,7 @@ export default function BookingConfirmedScreen() {
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 120 }}>
         <Card style={styles.card}>
           <Text style={styles.classTitle}>{course.class.title}</Text>
-          <Text style={styles.proName}>avec {course.teacher?.displayName}</Text>
+          <Text style={styles.proName}>avec {publicTeacherName(course.teacher)}</Text>
 
           <View style={styles.divider} />
 
@@ -169,7 +170,7 @@ export default function BookingConfirmedScreen() {
           }
         >
           <Text style={styles.contactBtnText}>
-            Envoyer un message à {course.teacher?.displayName}
+            Envoyer un message à {publicTeacherName(course.teacher)}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -178,7 +179,7 @@ export default function BookingConfirmedScreen() {
         <Button
           label="Voir mes réservations"
           onPress={() => {
-            navigation.getParent()?.navigate('Mes cours');
+            navigation.getParent()?.navigate('Réservations');
           }}
         />
       </View>

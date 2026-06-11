@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { teachersService } from '../../services/teachers.service';
 import { useCurrentTeacherId } from '../../hooks/useCurrentTeacher';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
@@ -33,6 +34,21 @@ const MOCK_PHOTOS = {
   ],
 };
 
+// Larger pool used to seed the optional gallery — picked at random when the
+// teacher taps "Ajouter une photo". Skips any URL already in the gallery so
+// repeated taps never create duplicates.
+const GALLERY_POOL = [
+  'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=900&q=80',
+  'https://images.unsplash.com/photo-1571115177098-24ec42ed204d?w=900&q=80',
+  'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?w=900&q=80',
+  'https://images.unsplash.com/photo-1612203985729-70726954388c?w=900&q=80',
+  'https://images.unsplash.com/photo-1517686469429-8bdb88b9f907?w=900&q=80',
+  'https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=900&q=80',
+  'https://images.unsplash.com/photo-1535905557558-afc4877a26fc?w=900&q=80',
+];
+
+const GALLERY_MAX = 8;
+
 type PhotoKey = 'place' | 'self' | 'activity';
 
 export default function TeacherPhotosScreen() {
@@ -45,6 +61,7 @@ export default function TeacherPhotosScreen() {
     self: teacher?.photos?.self ?? '',
     activity: teacher?.photos?.activity ?? '',
   });
+  const [gallery, setGallery] = useState<string[]>(teacher?.photos?.gallery ?? []);
 
   // Re-hydrate when the teacher resolves (useCurrentTeacherId is async on
   // first mount — the initial useState pass runs before the cache is ready).
@@ -55,8 +72,21 @@ export default function TeacherPhotosScreen() {
         self: teacher.photos.self ?? '',
         activity: teacher.photos.activity ?? '',
       });
+      setGallery(teacher.photos.gallery ?? []);
     }
-  }, [teacher?.photos?.place, teacher?.photos?.self, teacher?.photos?.activity]);
+  }, [teacher?.photos?.place, teacher?.photos?.self, teacher?.photos?.activity, teacher?.photos?.gallery]);
+
+  const handleAddGalleryPhoto = () => {
+    if (gallery.length >= GALLERY_MAX) return;
+    // Pick the first pool URL not already in the gallery so taps cycle through
+    // distinct images.
+    const next = GALLERY_POOL.find((u) => !gallery.includes(u));
+    if (next) setGallery([...gallery, next]);
+  };
+
+  const handleRemoveGalleryPhoto = (url: string) => {
+    setGallery((g) => g.filter((u) => u !== url));
+  };
 
   const handleMockPick = (key: PhotoKey) => {
     const opts = MOCK_PHOTOS[key];
@@ -72,7 +102,7 @@ export default function TeacherPhotosScreen() {
       Alert.alert('Erreur', 'Profil prof non chargé. Réessaie dans un instant.');
       return;
     }
-    await teachersService.updatePhotos(teacherId, photos);
+    await teachersService.updatePhotos(teacherId, { ...photos, gallery });
     const complete = !!(photos.place && photos.self && photos.activity);
     Alert.alert(
       complete ? 'Photos enregistrées ✓' : 'Photos partielles',
@@ -137,6 +167,47 @@ export default function TeacherPhotosScreen() {
           value={photos.activity}
           onPress={() => handleMockPick('activity')}
         />
+
+        {/* Optional gallery of additional realization photos */}
+        <View style={styles.galleryHeader}>
+          <Text style={styles.galleryTitle}>Photos supplémentaires</Text>
+          <Text style={styles.galleryCount}>
+            {gallery.length}/{GALLERY_MAX}
+          </Text>
+        </View>
+        <Text style={styles.gallerySubtitle}>
+          Optionnel — montre tes réalisations, les coulisses ou différents moments du cours.
+        </Text>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.galleryRow}
+        >
+          {gallery.map((url) => (
+            <View key={url} style={styles.galleryThumb}>
+              <Image source={{ uri: url }} style={styles.galleryImage} />
+              <TouchableOpacity
+                style={styles.galleryRemove}
+                activeOpacity={0.85}
+                onPress={() => handleRemoveGalleryPhoto(url)}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ))}
+          {gallery.length < GALLERY_MAX && (
+            <TouchableOpacity
+              style={[styles.galleryThumb, styles.galleryAdd]}
+              activeOpacity={0.85}
+              onPress={handleAddGalleryPhoto}
+            >
+              <Ionicons name="add" size={28} color={colors.proAccent} />
+              <Text style={styles.galleryAddText}>Ajouter</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
 
         <View style={styles.tip}>
           <Text style={styles.tipTitle}>Conseils pour de belles photos</Text>
@@ -325,6 +396,72 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   slotCheckText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+
+  // Gallery (optional extra photos shown to students on the class hero)
+  galleryHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
+    marginBottom: 4,
+  },
+  galleryTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: -0.2,
+  },
+  galleryCount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.proAccent,
+  },
+  gallerySubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  galleryRow: {
+    gap: spacing.sm,
+    paddingRight: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  galleryThumb: {
+    width: 96,
+    height: 96,
+    borderRadius: radii.md,
+    overflow: 'hidden',
+    backgroundColor: colors.card,
+    position: 'relative',
+  },
+  galleryImage: { width: '100%', height: '100%' },
+  galleryRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(26,23,20,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  galleryAdd: {
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  galleryAddText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.proAccent,
+  },
+
   tip: {
     backgroundColor: colors.surface,
     padding: spacing.md,

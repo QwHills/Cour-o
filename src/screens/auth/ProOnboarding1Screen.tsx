@@ -135,7 +135,8 @@ const styles = StyleSheet.create({
   },
   typeCardActive: {
     borderColor: colors.primary,
-    backgroundColor: '#FFFAF7',
+    // Tinted teal background matching the rest of the brand surface.
+    backgroundColor: 'rgba(67,196,176,0.06)',
   },
   typeEmoji: {
     fontSize: 36,

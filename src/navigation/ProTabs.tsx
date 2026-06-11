@@ -5,17 +5,17 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import ProDashboardScreen from '../screens/pro/ProDashboardScreen';
+import ProPointsScreen from '../screens/pro/ProPointsScreen';
+import ProAttendanceScreen from '../screens/pro/ProAttendanceScreen';
+import QuickAddSessionScreen from '../screens/pro/QuickAddSessionScreen';
+import NotificationsScreen from '../screens/user/NotificationsScreen';
 import MyPointsScreen from '../screens/shared/MyPointsScreen';
 import RewardsShopScreen from '../screens/shared/RewardsShopScreen';
 import RewardDetailScreen from '../screens/shared/RewardDetailScreen';
 import MyRedemptionsScreen from '../screens/shared/MyRedemptionsScreen';
 import TeacherReviewsScreen from '../screens/shared/TeacherReviewsScreen';
 import ProPlanningScreen from '../screens/pro/ProPlanningScreen';
-import ProClassesScreen from '../screens/pro/ProClassesScreen';
-import CreateClassScreen from '../screens/pro/CreateClassScreen';
-import ProRevenueScreen from '../screens/pro/ProRevenueScreen';
 import ProSettingsScreen from '../screens/pro/ProSettingsScreen';
-import ProOffersScreen from '../screens/pro/ProOffersScreen';
 import SessionParticipantsScreen from '../screens/pro/SessionParticipantsScreen';
 import ParticipantHistoryScreen from '../screens/pro/ParticipantHistoryScreen';
 import CalendarSyncScreen from '../screens/pro/CalendarSyncScreen';
@@ -42,28 +42,21 @@ const Stack = createNativeStackNavigator();
 function TabIcon({
   name,
   focused,
-  label,
 }: {
   name: keyof typeof Ionicons.glyphMap;
   focused: boolean;
-  label: string;
+  // label kept in the public signature so existing call sites compile; we
+  // no longer render it under the icon (icon-only design, like UserTabs).
+  label?: string;
 }) {
   return (
     <View style={tabStyles.container}>
       {focused && <View style={tabStyles.indicator} />}
       <Ionicons
         name={name}
-        size={22}
+        size={28}
         color={focused ? colors.proAccent : colors.textLight}
       />
-      <Text
-        style={[
-          tabStyles.label,
-          { color: focused ? colors.proAccent : colors.textLight, fontWeight: focused ? '700' : '500' },
-        ]}
-      >
-        {label}
-      </Text>
     </View>
   );
 }
@@ -72,22 +65,16 @@ const tabStyles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 64,
-    height: 48,
+    height: 40,
     position: 'relative',
   },
   indicator: {
     position: 'absolute',
-    top: -8,
+    top: -10,
     width: 28,
     height: 3,
     borderRadius: 2,
     backgroundColor: colors.proAccent,
-  },
-  label: {
-    fontSize: 9,
-    letterSpacing: 0.3,
-    marginTop: 4,
   },
 });
 
@@ -100,7 +87,6 @@ function DashboardStack() {
       <Stack.Screen name="RewardDetail" component={RewardDetailScreen} options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="MyRedemptions" component={MyRedemptionsScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="TeacherReviews" component={TeacherReviewsScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="ProOffers" component={ProOffersScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen
         name="CertificationProgress"
         component={CertificationProgressScreen}
@@ -134,15 +120,11 @@ function PlanningStack() {
         component={ParticipantHistoryScreen}
         options={{ animation: 'slide_from_right' }}
       />
-    </Stack.Navigator>
-  );
-}
-
-function ClassesStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ClassesList" component={ProClassesScreen} />
-      <Stack.Screen name="CreateClass" component={CreateClassScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen
+        name="QuickAddSession"
+        component={QuickAddSessionScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
     </Stack.Navigator>
   );
 }
@@ -164,6 +146,7 @@ function SettingsStack() {
       <Stack.Screen name="CommissionInfo" component={CommissionInfoScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="CancellationPolicy" component={CancellationPolicyScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="CGV" component={CGUScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
     </Stack.Navigator>
   );
 }
@@ -177,9 +160,9 @@ export default function ProTabs() {
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopWidth: 0,
-          height: 88,
-          paddingTop: 12,
-          paddingBottom: 30,
+          height: 78,
+          paddingTop: 14,
+          paddingBottom: 28,
           shadowColor: '#1A1714',
           shadowOffset: { width: 0, height: -6 },
           shadowOpacity: 0.06,
@@ -207,20 +190,20 @@ export default function ProTabs() {
         }}
       />
       <Tab.Screen
-        name="Offres"
-        component={ClassesStack}
+        name="Points"
+        component={ProPointsScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'grid' : 'grid-outline'} focused={focused} label="Offres" />
+            <TabIcon name={focused ? 'star' : 'star-outline'} focused={focused} label="Points" />
           ),
         }}
       />
       <Tab.Screen
-        name="Revenus"
-        component={ProRevenueScreen}
+        name="Présences"
+        component={ProAttendanceScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'wallet' : 'wallet-outline'} focused={focused} label="Revenus" />
+            <TabIcon name={focused ? 'people' : 'people-outline'} focused={focused} label="Présences" />
           ),
         }}
       />

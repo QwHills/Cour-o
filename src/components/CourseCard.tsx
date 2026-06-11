@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, radii, shadows } from '../theme/theme';
 import { EnrichedCourse } from '../services/courses.service';
 import { formatTimeLabel, formatDateLabel } from '../utils/date';
+import { publicTeacherName } from '../utils/teacherName';
 import { getCategoryColor } from '../utils/categoryIcons';
 import { isPromoLive } from '../types/domain';
 import FavoriteButton from './FavoriteButton';
@@ -89,7 +90,7 @@ export default function CourseCard({ course, onPress }: CourseCardProps) {
         <Text style={styles.title} numberOfLines={1}>{cls.title}</Text>
         {teacher && (
           <Text style={styles.teacher}>
-            {teacher.displayName}
+            {publicTeacherName(teacher)}
             {teacher.rating > 0 ? `  ★ ${teacher.rating}` : ''}
           </Text>
         )}

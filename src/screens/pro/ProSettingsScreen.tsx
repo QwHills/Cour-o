@@ -120,6 +120,35 @@ export default function ProSettingsScreen() {
       </Card>
 
       <Card style={styles.block} padding="none">
+        <SectionHeader title="Suivi & progression" />
+        <MenuRow
+          icon="bar-chart-outline"
+          label="Statistiques détaillées"
+          sub="Réservations, remplissage, revenus"
+          // ProStats vit dans le DashboardStack — on remonte au tab parent
+          // pour y plonger sans casser le back stack.
+          onPress={() =>
+            navigation.getParent()?.navigate('Accueil', {
+              screen: 'ProStats',
+              initial: false,
+            })
+          }
+        />
+        <MenuRow
+          icon="ribbon-outline"
+          label="Progression certification"
+          sub="Étapes vers la certification Koureo"
+          onPress={() =>
+            navigation.getParent()?.navigate('Accueil', {
+              screen: 'CertificationProgress',
+              initial: false,
+            })
+          }
+          isLast
+        />
+      </Card>
+
+      <Card style={styles.block} padding="none">
         <SectionHeader title="Politique" />
         <MenuRow
           icon="shield-checkmark-outline"

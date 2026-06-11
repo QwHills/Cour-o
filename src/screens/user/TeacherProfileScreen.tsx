@@ -22,6 +22,7 @@ import { supabase } from '../../services/supabase/client';
 import { maskAddress } from '../../utils/location';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import { getCategoryColor } from '../../utils/categoryIcons';
+import { publicTeacherName } from '../../utils/teacherName';
 import TeacherBadge from '../../components/TeacherBadge';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -163,7 +164,7 @@ export default function TeacherProfileScreen() {
           </TouchableOpacity>
 
           <Image source={{ uri: teacher.photoUrl }} style={styles.avatar} />
-          <Text style={styles.name}>{teacher.displayName}</Text>
+          <Text style={styles.name}>{publicTeacherName(teacher)}</Text>
           <TeacherBadge status={teacher.status} style={{ marginTop: spacing.sm }} />
 
           {/* Rating summary — tap to see reviews */}
@@ -349,7 +350,7 @@ export default function TeacherProfileScreen() {
           <View style={styles.trustNotice}>
             <Text style={styles.trustNoticeTitle}>Nouveau sur Koureo</Text>
             <Text style={styles.trustNoticeText}>
-              {teacher.displayName} est en phase d'évaluation. Ses cours sont
+              {publicTeacherName(teacher)} est en phase d'évaluation. Ses cours sont
               proposés gratuitement. Ton retour l'aidera à être certifié.
             </Text>
           </View>

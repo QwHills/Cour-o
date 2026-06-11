@@ -22,6 +22,7 @@ import { authService } from '../../services/auth.service';
 import { organizationsService } from '../../services/organizations.service';
 import { teachersService } from '../../services/teachers.service';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
+import { publicTeacherName } from '../../utils/teacherName';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
@@ -51,7 +52,7 @@ export default function ProductCheckoutScreen() {
   const sellerName = useMemo(() => {
     if (!product) return '';
     if (product.ownerType === 'teacher') {
-      return teachersService.getCached(product.ownerId)?.displayName ?? 'Professeur';
+      return publicTeacherName(teachersService.getCached(product.ownerId)) || 'Professeur';
     }
     return organizationsService.getById(product.ownerId)?.name ?? 'Structure';
   }, [product]);

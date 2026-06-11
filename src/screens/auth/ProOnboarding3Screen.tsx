@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { authService } from '../../services/auth.service';
 import { teachersService } from '../../services/teachers.service';
+import { geocodeAddress } from '../../utils/geocode';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
@@ -20,7 +21,16 @@ import Button from '../../components/ui/Button';
 export default function ProOnboarding3Screen() {
   const navigation = useNavigation();
   const route = useRoute<any>();
-  const { name: userName, email, password, kind, bio, categories, isUpgrade } = route.params;
+  const {
+    name: userName,
+    email,
+    password,
+    kind,
+    bio,
+    categories,
+    photoUrl: photoFromStep3,
+    isUpgrade,
+  } = route.params;
 
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,42 +38,72 @@ export default function ProOnboarding3Screen() {
   const [siret, setSiret] = useState('');
 
   const handlePublish = async () => {
-    if (!address) {
-      Alert.alert('', 'Entre l\'adresse où tu donnes tes cours.');
+    const cleanAddress = address.trim();
+    if (!cleanAddress) {
+      Alert.alert('Adresse manquante', "Entre l'adresse où tu donnes tes cours.");
       return;
     }
 
     setLoading(true);
     try {
+      // 1. Geocode the address up front so a typo / unknown street doesn't
+      //    leave the new prof stuck on the Rennes default position.
+      const geo = await geocodeAddress(cleanAddress);
+      if (!geo.resolved) {
+        // Soft-warn; we still let them through with the Rennes fallback so
+        // signup never blocks. They can fix the position later from the web.
+        console.warn('[onboarding3] geocoding fallback for', cleanAddress);
+      }
+
+      // 2. Create-or-promote the auth account.
       let userId: string;
       if (isUpgrade) {
-        // Existing user becoming a teacher — no new account, just promote role
         const currentUser = authService.getCurrentUser();
         if (!currentUser) throw new Error('Session expirée, reconnecte-toi.');
         userId = currentUser.id;
         await authService.upgradeToPro();
       } else {
-        // New account flow (from WelcomeScreen → ProSignUp → ...)
+        if (!email || !password) throw new Error('Email ou mot de passe manquant.');
         const user = await authService.signUp(userName, email, password, 'pro');
         userId = user.id;
       }
 
-      // Create teacher profile (same for both paths). Await so we surface
-      // any RLS / constraint error instead of silently failing.
+      // 3. Create the teacher profile with the geocoded coords + the photo
+      //    chosen at step 3 (fallback to a generic avatar if the prof skipped
+      //    the photo step — they can change it any time from Réglages).
       await teachersService.createTeacher({
         userId,
         kind,
         displayName: userName,
         bio: bio || '',
-        photoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&q=80',
+        photoUrl:
+          photoFromStep3 ||
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&q=80',
         categories,
-        address,
+        address: cleanAddress,
+        latitude: geo.latitude,
+        longitude: geo.longitude,
       });
 
-      // upgradeToPro / signUp with role='pro' both trigger RootNavigator → ProTabs
+      // 4. Success feedback — RootNavigator will swap to ProTabs once the
+      //    auth state propagates, but a confirmation pops anxiety down.
+      const successMsg = geo.resolved
+        ? 'Bienvenue sur Koureo ! Ton profil est en ligne.'
+        : "Bienvenue sur Koureo ! On n'a pas trouvé l'adresse exactement — tu peux corriger la position depuis Réglages.";
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(successMsg);
+      } else {
+        Alert.alert('Profil créé ✓', successMsg);
+      }
     } catch (e: any) {
       console.error('[onboarding3] failed:', e);
-      const msg = e?.message ?? 'Une erreur est survenue';
+      const raw = e?.message ?? 'Une erreur est survenue';
+      // Friendlier copy for the most common Supabase errors.
+      const msg = raw.includes('already registered')
+        ? 'Cet email a déjà un compte. Connecte-toi ou utilise un autre email.'
+        : raw.includes('Password')
+          ? 'Le mot de passe doit faire au moins 6 caractères.'
+          : raw;
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert('Erreur : ' + msg);
       } else {

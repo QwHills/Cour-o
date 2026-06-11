@@ -15,6 +15,7 @@ import { colors, spacing, radii, shadows } from '../../theme/theme';
 import SessionSlot from '../../components/SessionSlot';
 import Button from '../../components/ui/Button';
 import { formatDateLabel, formatTimeLabel, formatFullDate } from '../../utils/date';
+import { publicTeacherName } from '../../utils/teacherName';
 
 export default function SlotPickerScreen() {
   const route = useRoute<any>();
@@ -76,7 +77,7 @@ export default function SlotPickerScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 160 }}>
         <Text style={styles.courseName}>{course.class.title}</Text>
-        <Text style={styles.proName}>avec {course.teacher?.displayName}</Text>
+        <Text style={styles.proName}>avec {publicTeacherName(course.teacher)}</Text>
         <Text style={styles.helperText}>
           Tape sur les créneaux qui te conviennent — tu peux en sélectionner plusieurs.
         </Text>

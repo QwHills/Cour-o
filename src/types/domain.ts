@@ -74,6 +74,10 @@ export interface TeacherPhotos {
   place?: string;     // Photo du lieu
   self?: string;      // Photo du professeur
   activity?: string;  // Photo de l'activité en action
+  // Optional gallery of extra activity/realization photos, shown on the
+  // class detail hero as a swipable carousel. Empty by default — the 3
+  // photos above remain mandatory; everything here is bonus.
+  gallery?: string[];
 }
 
 export interface ClassOffer {

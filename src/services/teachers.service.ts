@@ -49,6 +49,12 @@ function rowToTeacher(row: any): TeacherProfile {
       place: row.photo_place ?? undefined,
       self: row.photo_self ?? undefined,
       activity: row.photo_activity ?? undefined,
+      // `photo_gallery` is a jsonb array on the DB. Defensive parse so a
+      // legacy row with `null` or a stray non-array value never crashes the
+      // mapper — fall back to empty list.
+      gallery: Array.isArray(row.photo_gallery)
+        ? (row.photo_gallery as string[]).filter((u: any) => typeof u === 'string')
+        : [],
     },
   };
 }
@@ -121,6 +127,10 @@ export const teachersService = {
     photoUrl: string;
     categories: Category[];
     address: string;
+    // Optional geocoded coords — if absent we fall back to Rennes (legacy
+    // behaviour) so callers that don't yet geocode don't break.
+    latitude?: number;
+    longitude?: number;
   }): Promise<TeacherProfile> {
     const { data, error } = await supabase
       .from('teacher_profiles')
@@ -133,8 +143,8 @@ export const teachersService = {
         photo_url: input.photoUrl,
         categories: input.categories,
         address: input.address,
-        latitude: 48.1113,
-        longitude: -1.68,
+        latitude: input.latitude ?? 48.1113,
+        longitude: input.longitude ?? -1.68,
       })
       .select()
       .single();
@@ -168,6 +178,7 @@ export const teachersService = {
       if (patch.photos.place !== undefined) updates.photo_place = patch.photos.place;
       if (patch.photos.self !== undefined) updates.photo_self = patch.photos.self;
       if (patch.photos.activity !== undefined) updates.photo_activity = patch.photos.activity;
+      if (patch.photos.gallery !== undefined) updates.photo_gallery = patch.photos.gallery;
     }
 
     const { error } = await supabase
@@ -185,7 +196,7 @@ export const teachersService = {
 
   async updatePhotos(
     teacherId: string,
-    photos: { place?: string; self?: string; activity?: string }
+    photos: { place?: string; self?: string; activity?: string; gallery?: string[] }
   ): Promise<void> {
     await this.updateProfile(teacherId, {
       photos: { ...cache.get(teacherId)?.photos, ...photos },

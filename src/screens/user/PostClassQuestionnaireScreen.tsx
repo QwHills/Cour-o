@@ -17,6 +17,7 @@ import { authService } from '../../services/auth.service';
 import { teachersService } from '../../services/teachers.service';
 import { QuestionnaireAnswers } from '../../types/domain';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
+import { publicTeacherName } from '../../utils/teacherName';
 import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
@@ -45,9 +46,10 @@ export default function PostClassQuestionnaireScreen() {
 
   const teacherStatus = teachersService.getStatus(course.teacher.id) ?? 'new_teacher';
   const isInEvaluation = questionnaireService.isRequiredFor(teacherStatus);
+  const teacherPublic = publicTeacherName(course.teacher);
   const subtitle = isInEvaluation
-    ? `Ton avis aide ${course.teacher.displayName} à progresser vers la certification.`
-    : `Ton avis aide la communauté à choisir et ${course.teacher.displayName} à s'améliorer.`;
+    ? `Ton avis aide ${teacherPublic} à progresser vers la certification.`
+    : `Ton avis aide la communauté à choisir et ${teacherPublic} à s'améliorer.`;
 
   const allAnswered =
     answers.q1_onTime !== undefined &&

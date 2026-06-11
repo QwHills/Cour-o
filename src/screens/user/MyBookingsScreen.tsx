@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,6 +17,7 @@ import { authService } from '../../services/auth.service';
 import { Booking } from '../../types/domain';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import { formatFullDate, formatTimeLabel } from '../../utils/date';
+import { publicTeacherName } from '../../utils/teacherName';
 import Badge from '../../components/ui/Badge';
 
 type Tab = 'upcoming' | 'past';
@@ -24,6 +26,7 @@ export default function MyBookingsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const [tab, setTab] = useState<Tab>('upcoming');
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const refresh = () => {
@@ -84,6 +87,20 @@ export default function MyBookingsScreen() {
           data={filtered}
           keyExtractor={(b) => b.id}
           contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                try {
+                  await bookingsService.load();
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              tintColor={colors.primary}
+            />
+          }
           renderItem={({ item }) => <BookingItem booking={item} onPress={() => {
             if (item.questionnaireRequired && !item.questionnaireCompleted) {
               navigation.navigate('PostClassQuestionnaire', { bookingId: item.id });
@@ -119,7 +136,7 @@ function BookingItem({ booking, onPress }: { booking: Booking; onPress: () => vo
           <Text style={styles.cardTitle} numberOfLines={1}>{course.class.title}</Text>
           <Badge label={statusLabel} variant={statusVariant} small />
         </View>
-        <Text style={styles.cardPro}>avec {course.teacher?.displayName}</Text>
+        <Text style={styles.cardPro}>avec {publicTeacherName(course.teacher)}</Text>
         <View style={styles.cardDetails}>
           <Text style={styles.cardDetail}>📅 {formatFullDate(booking.sessionStartsAt)}</Text>
           <Text style={styles.cardDetail}>🕐 {formatTimeLabel(booking.sessionStartsAt)}</Text>

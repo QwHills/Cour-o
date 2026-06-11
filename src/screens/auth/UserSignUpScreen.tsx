@@ -13,6 +13,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { authService } from '../../services/auth.service';
 import { colors, spacing, radii } from '../../theme/theme';
 import Input from '../../components/ui/Input';
+import PasswordInput from '../../components/ui/PasswordInput';
 import Button from '../../components/ui/Button';
 
 export default function UserSignUpScreen() {
@@ -20,24 +21,55 @@ export default function UserSignUpScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [acceptCGU, setAcceptCGU] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const emailLooksValid = (e: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+
   const handleCreate = async () => {
-    if (!name || !email || !password) {
-      Alert.alert('', 'Remplis tous les champs pour continuer.');
+    const cleanName = name.trim();
+    const cleanEmail = email.trim();
+    if (!cleanName || !cleanEmail || !password) {
+      Alert.alert('Champs manquants', 'Remplis tous les champs pour continuer.');
+      return;
+    }
+    if (!emailLooksValid(cleanEmail)) {
+      Alert.alert('Email invalide', 'Vérifie le format de ton adresse email.');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert(
+        'Mot de passe trop court',
+        "Choisis un mot de passe d'au moins 6 caractères.",
+      );
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert(
+        'Les mots de passe ne correspondent pas',
+        'Vérifie que tu as saisi le même mot de passe dans les deux champs.',
+      );
       return;
     }
     if (!acceptCGU) {
-      Alert.alert('', "Tu dois accepter les conditions d'utilisation.");
+      Alert.alert(
+        'CGU non acceptées',
+        "Tu dois accepter les conditions d'utilisation pour continuer.",
+      );
       return;
     }
     setLoading(true);
     try {
-      await authService.signUp(name, email, password, 'user');
+      await authService.signUp(cleanName, cleanEmail, password, 'user');
       // RootNavigator detects role='user' → shows UserTabs
     } catch (e: any) {
-      Alert.alert('Erreur', e.message);
+      const raw = e?.message ?? 'Une erreur est survenue';
+      const msg = raw.includes('already registered')
+        ? 'Cet email a déjà un compte. Connecte-toi ou utilise un autre email.'
+        : raw;
+      Alert.alert('Erreur', msg);
     } finally {
       setLoading(false);
     }
@@ -77,12 +109,22 @@ export default function UserSignUpScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
           />
-          <Input
+          <PasswordInput
             label="Mot de passe"
             placeholder="6 caractères minimum"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+          />
+          <PasswordInput
+            label="Confirme ton mot de passe"
+            placeholder="Re-tape le même mot de passe"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            error={
+              confirmPassword.length > 0 && confirmPassword !== password
+                ? 'Les mots de passe ne correspondent pas'
+                : undefined
+            }
           />
         </View>
 

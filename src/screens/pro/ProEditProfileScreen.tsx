@@ -11,14 +11,12 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { getTeacherById } from '../../data/mockTeachers';
 import { teachersService } from '../../services/teachers.service';
+import { useCurrentTeacher } from '../../hooks/useCurrentTeacher';
 import { Category } from '../../types/domain';
 import { colors, spacing, radii, shadows } from '../../theme/theme';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
-
-const DEMO_TEACHER_ID = '22222222-2222-2222-2222-222222222003';
 
 const ALL_CATEGORIES: Category[] = [
   'Yoga', 'Danse', 'Musique', 'Sport', 'Bien-être', 'Langues',
@@ -27,11 +25,23 @@ const ALL_CATEGORIES: Category[] = [
 
 export default function ProEditProfileScreen() {
   const navigation = useNavigation();
-  const teacher = getTeacherById(DEMO_TEACHER_ID);
+  // Hook resolves the real signed-in teacher from auth — the previous
+  // hardcoded DEMO_TEACHER_ID meant every prof was editing Sophie's profile.
+  const teacher = useCurrentTeacher();
 
   const [displayName, setDisplayName] = useState(teacher?.displayName ?? '');
   const [bio, setBio] = useState(teacher?.bio ?? '');
   const [categories, setCategories] = useState<Category[]>(teacher?.categories ?? []);
+
+  // The teacher hook resolves async on first mount — re-hydrate the form
+  // fields once we actually have a profile so they're not stuck empty.
+  React.useEffect(() => {
+    if (teacher) {
+      setDisplayName(teacher.displayName ?? '');
+      setBio(teacher.bio ?? '');
+      setCategories(teacher.categories ?? []);
+    }
+  }, [teacher?.id, teacher?.displayName, teacher?.bio, teacher?.categories]);
 
   const toggleCategory = (cat: Category) => {
     setCategories((prev) =>
@@ -40,7 +50,11 @@ export default function ProEditProfileScreen() {
   };
 
   const handleSave = () => {
-    teachersService.updateProfile(DEMO_TEACHER_ID, {
+    if (!teacher) {
+      Alert.alert('Erreur', 'Profil prof non chargé. Réessaie dans un instant.');
+      return;
+    }
+    teachersService.updateProfile(teacher.id, {
       displayName,
       bio,
       categories,
